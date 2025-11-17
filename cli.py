@@ -5,7 +5,6 @@ from typing import Sequence
 import torch
 
 from bsgd import train_bsgd_neurips
-from experiments import plot_neurips_figure2, run_neurips_figure2_experiment
 from minimax import minimax_train_orf
 from scgd import scgd_train_orf
 from utils import exact_nlml_gradients, generate_gp_data, orf_features
@@ -162,26 +161,6 @@ def run_nlml_grad(args):
     )
 
 
-def run_figure2(args):
-    device = _resolve_device(args.device)
-    results = run_neurips_figure2_experiment(
-        m_list=tuple(args.m_list),
-        n=args.n,
-        lengthscale=args.lengthscale,
-        sigma_f2_true=args.sigma_f2_true,
-        sigma_eps2_true=args.sigma_eps2_true,
-        n_epochs=args.n_epochs,
-        n_reps=args.n_reps,
-        device=device,
-    )
-    plot_neurips_figure2(results, m_list=tuple(args.m_list), filename=args.output)
-    print(
-        "\n[Figure2] Finished on device {} -> results saved to {}".format(
-            device, args.output
-        )
-    )
-
-
 def _add_common_data_args(parser: argparse.ArgumentParser):
     parser.add_argument("--n", type=int, default=1024, help="Number of data points.")
     parser.add_argument("--lengthscale", type=float, default=0.5, help="RBF lengthscale.")
@@ -281,24 +260,6 @@ def build_parser() -> argparse.ArgumentParser:
     scgd_parser.add_argument("--w-init-scale", type=float, default=0.1)
     scgd_parser.add_argument("--print-every", type=int, default=1)
     scgd_parser.set_defaults(func=run_scgd)
-
-    # Figure 2 parser
-    fig2_parser = subparsers.add_parser(
-        "figure2",
-        parents=[common],
-        help="Reproduce NeurIPS Figure 2 experiment.",
-    )
-    fig2_parser.add_argument(
-        "--m-list",
-        type=int,
-        nargs="+",
-        default=(64, 32, 16),
-        help="Mini-batch sizes to evaluate.",
-    )
-    fig2_parser.add_argument("--n-epochs", type=int, default=25)
-    fig2_parser.add_argument("--n-reps", type=int, default=10)
-    fig2_parser.add_argument("--output", default="neurips_figure2.png")
-    fig2_parser.set_defaults(func=run_figure2)
 
     # Exact NLML gradient parser
     grad_parser = subparsers.add_parser(

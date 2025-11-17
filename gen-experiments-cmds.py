@@ -238,7 +238,107 @@ def main() -> None:
             )
             print(cmd)
     print()
-    
+
+    # ------------------------------------------------------------------
+    # Figure 2: full gradient vs minibatch size – BSGD (exact reproduction)
+    # ------------------------------------------------------------------
+    #
+    # This is *exactly* the experiment in experiments.run_neurips_figure2_experiment
+    # and the "figure2" subcommand in cli.py:
+    #   * m_list = (64, 32, 16)
+    #   * n = 1024, lengthscale = 0.5
+    #   * true σ_f² = 4, σ_ε² = 1
+    #   * 25 epochs, 10 repetitions (internal seeds 0..9)
+    #
+    # It saves a single PNG with 3 panels (one per minibatch size).
+    #
+    print("# ------------------------------------------------------------------")
+    print("# Figure 2: BSGD gradient-norm experiment (exact reproduction)")
+    print("# ------------------------------------------------------------------")
+
+    m_list = [64, 32, 16]
+    for m in m_list:
+        for seed in seeds:
+            log_path = logdir / f"fig2_bsgd_m{m}_seed{seed}.log"
+            cmd = (
+                f"{py} {cli} bsgd "
+                f"{common_gp_flags}"
+                f"--seed {seed} "
+                f"--batch-size {m} "
+                "--n-epochs 25 "
+                "--sigma-f2-init 5.0 "
+                "--sigma-eps2-init 3.0 "
+                "--alpha1 9.0 "
+                "--theta-min 1e-4 "
+                "--theta-max 20.0 "
+                "--print-every 1 "
+            )
+            print(cmd)
+    print()
+
+    # ------------------------------------------------------------------
+    # Optional: Figure‑2‑style regimes for MINIMAX / SCGD
+    # ------------------------------------------------------------------
+    #
+    # We cannot compute the *full GP gradient* for MINIMAX / SCGD without
+    # adding new instrumentation. However, it is still useful to run them
+    # in the same (n, lengthscale, σ_f², σ_ε²) regime for different m.
+    #
+    # Below we generate runs where we simply vary --batch-size in {64, 32, 16}
+    # and keep n_epochs = 25. You can parse their logs and, e.g., visualize:
+    #   - σ_f² / σ_ε² vs iteration
+    #   - approximate NLML, |A-F|/|A|, |F~ - F|/|F|, etc.
+    #
+    print("# ------------------------------------------------------------------")
+    print("# OPTIONAL: Figure-2-style runs for MINIMAX (varying minibatch size)")
+    print("# ------------------------------------------------------------------")
+    for m in m_list:
+        for seed in seeds:
+            log_path = logdir / f"fig2_minimax_m{m}_seed{seed}.log"
+            cmd = (
+                f"{py} {cli} minimax "
+                f"{common_gp_flags}"
+                f"--seed {seed} "
+                f"--batch-size {m} "
+                "--n-epochs 25 "
+                "--mu 1.0 "
+                "--a 1e-3 "
+                "--b 1e-3 "
+                "--lr-decay 1.0 "
+                "--sigma-f2-init 5.0 "
+                "--sigma-eps2-init 3.0 "
+                "--w-init-scale 0.1 "
+                "--num-features 128 "
+                "--print-every 1 "
+            )
+            print(cmd)
+    print()
+
+    print("# ------------------------------------------------------------------")
+    print("# OPTIONAL: Figure-2-style runs for SCGD (varying minibatch size)")
+    print("# ------------------------------------------------------------------")
+    for m in m_list:
+        for seed in seeds:
+            log_path = logdir / f"fig2_scgd_m{m}_seed{seed}.log"
+            cmd = (
+                f"{py} {cli} scgd "
+                f"{common_gp_flags}"
+                f"--seed {seed} "
+                f"--batch-size {m} "
+                "--n-epochs 25 "
+                "--a0 1e-3 "
+                "--b0 1e-3 "
+                "--a-decay 0.75 "
+                "--b-decay 0.5 "
+                "--sigma-f2-init 5.0 "
+                "--sigma-eps2-init 3.0 "
+                "--w-init-scale 0.1 "
+                "--num-features 128 "
+                "--print-every 1 "
+            )
+            print(cmd)
+    print()
+
     print("# End of generated commands.")
 
 
