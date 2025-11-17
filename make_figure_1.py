@@ -43,6 +43,7 @@ ALGO_TITLES = {
 def make_figure1_from_df(
     df,
     output: str | Path = "neurips_figure1_all_algos.png",
+    smooth_window: int = 1,
 ) -> None:
     """
     Create a 3x3 panel plot:
@@ -66,17 +67,43 @@ def make_figure1_from_df(
     )
     df = df[mask_common].copy()
 
-    # For BSGD, Figure 1 uses 200 epochs (one iteration per epoch)
-    # This also avoids mixing in Figure 2 runs.
+    # Some SCGD directories hit filesystem filename limits, which truncated the
+    # literal "--sigma-eps2-init <value>" argument down to "--sigma-eps2-init 3."
+    # or "--sigma-eps2-init 0.".  That in turn makes the parsed metadata show
+    # values 3.0 and 0.0 even though the intended initializations were 3.5 and
+    # 0.7.  Since all ambiguous SCGD runs use σ_f²_init = 2.5, we can safely fix
+    # them up here before applying per-configuration filters.
+    scgd_fixups = [
+        {"sigma_f2_init": 2.5, "observed_eps2": 3.0, "corrected_eps2": 3.5},
+        {"sigma_f2_init": 2.5, "observed_eps2": 0.0, "corrected_eps2": 0.7},
+    ]
+    for fix in scgd_fixups:
+        mask_fix = (
+            (df["algo"] == "scgd")
+            & np.isclose(df["sigma_f2_init"], fix["sigma_f2_init"])
+            & np.isclose(df["sigma_eps2_init"], fix["observed_eps2"])
+        )
+        df.loc[mask_fix, "sigma_eps2_init"] = fix["corrected_eps2"]
+
+    # For Figure 1 we only use the long 200-epoch runs (one iteration per epoch)
+    # while keeping the batch size at 128 across all algorithms.
     df_bsgd = df[(df["algo"] == "bsgd") & (df["n_epochs"] == 200)]
-    df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == 25)]
-    df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == 25)]
+    df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == 200)]
+    df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == 200)]
 
     algo_to_df = {
         "bsgd": df_bsgd,
         "minimax": df_minimax,
         "scgd": df_scgd,
     }
+
+    smooth_window = int(max(smooth_window, 1))
+
+    def smooth_series(y: np.ndarray) -> np.ndarray:
+        if smooth_window <= 1:
+            return y
+        kernel = np.ones(smooth_window, dtype=float) / smooth_window
+        return np.convolve(y, kernel, mode="same")
 
     fig, axes = plt.subplots(
         nrows=len(ALGO_ORDER),
@@ -131,8 +158,12 @@ def make_figure1_from_df(
                 )
                 x = df_seed["iter"].to_numpy()
 
-                sigma_f2 = df_seed["sigma_f2"].to_numpy(dtype=float)
-                sigma_eps2 = df_seed["sigma_eps2"].to_numpy(dtype=float)
+                sigma_f2 = smooth_series(
+                    df_seed["sigma_f2"].to_numpy(dtype=float)
+                )
+                sigma_eps2 = smooth_series(
+                    df_seed["sigma_eps2"].to_numpy(dtype=float)
+                )
 
                 color = seed_to_color.get(seed, "C0")
                 ax.plot(
@@ -240,14 +271,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res/output/1"),
-        help="Base directory containing stdout logs (default: res/output/1).",
+        default=Path("res/results/1"),
+        help="Base directory containing stdout logs (default: res/results/1).",
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=Path("neurips_figure1_all_algos.png"),
         help="Output image filename.",
+    )
+    parser.add_argument(
+        "--smooth-window",
+        type=int,
+        default=1,
+        help=(
+            "Moving-average window size (in iterations) applied to each "
+            "trajectory before plotting (default: 1, i.e., no smoothing)."
+        ),
     )
     return parser
 
@@ -261,7 +301,11 @@ def main() -> None:
         print(f"No stdout records found under {args.root}")
         return
 
-    make_figure1_from_df(df, output=args.output)
+    make_figure1_from_df(
+        df,
+        output=args.output,
+        smooth_window=args.smooth_window,
+    )
 
 
 if __name__ == "__main__":
