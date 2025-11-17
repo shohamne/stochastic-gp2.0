@@ -234,7 +234,6 @@ def main() -> None:
                 "--w-init-scale 0.1 "
                 "--num-features 128 "
                 "--print-every 1 "
-                "--lr-decay 0.95"
             )
             print(cmd)
     print()
