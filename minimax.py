@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 
@@ -66,8 +67,11 @@ def minimax_train_orf(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
         "real_nlml\torf_nlml\t"
         "real_nlml_true\torf_nlml_true\t"
-        "ℓ_μ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\tlr_scale\t||grad||"
+        "ℓ_μ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\t"
+        "lr_scale\t||grad||\tduration_s\twall_time_s"
     )
+
+    run_start = time.perf_counter()
 
     for epoch in range(n_epochs):
         perm = torch.randperm(n, device=device)
@@ -77,6 +81,7 @@ def minimax_train_orf(
             if S.numel() == 0:
                 continue
 
+            iter_start = time.perf_counter()
             S_bar = torch.randperm(n, device=device)[:batch_size]
             total_steps += 1
             if (not decay_active) and ((epoch + 1) >= lr_decay_start_epoch):
@@ -234,6 +239,9 @@ def minimax_train_orf(
                     )
                     grad_norm = grad_exact.norm().item()
 
+                    now = time.perf_counter()
+                    iter_duration = now - iter_start
+                    wall_elapsed = now - run_start
                     print(
                         f"{total_steps:4d}\t{epoch+1:2d}\t"
                         f"{sigma_f2.item():7.4f}\t{sigma_eps2.item():7.4f}\t"
@@ -247,7 +255,9 @@ def minimax_train_orf(
                         f"{cos_val:7.4f}\t"
                         f"{pen_ratio:7.4f}\t"
                         f"{last_lr_scale:8.5f}\t"
-                        f"{grad_norm:9.3e}"
+                        f"{grad_norm:9.3e}\t"
+                        f"{iter_duration:8.3f}\t"
+                        f"{wall_elapsed:10.3f}"
                     )
 
     return w, rho, sigma2, A, B

@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 
@@ -63,8 +64,10 @@ def scgd_train_orf(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
         "real_nlml\torf_nlml\t"
         "real_nlml_true\torf_nlml_true\t"
-        "approx_nlml\t|F~ - F|/|F|\t||grad||"
+        "approx_nlml\t|F~ - F|/|F|\t||grad||\tduration_s\twall_time_s"
     )
+
+    run_start = time.perf_counter()
 
     for epoch in range(n_epochs):
         perm = torch.randperm(n, device=device)
@@ -74,6 +77,7 @@ def scgd_train_orf(
             if S.numel() == 0:
                 continue
 
+            iter_start = time.perf_counter()
             total_steps += 1
             m = S.numel()
             if (decay_start_step is None) and ((epoch + 1) >= decay_start_epoch):
@@ -176,6 +180,9 @@ def scgd_train_orf(
                     )
                     grad_norm = grad_exact.norm().item()
 
+                    now = time.perf_counter()
+                    iter_duration = now - iter_start
+                    wall_elapsed = now - run_start
                     print(
                         f"{total_steps:4d}\t{epoch+1:2d}\t"
                         f"{sigma_f2.item():7.4f}\t{sigma_eps2.item():7.4f}\t"
@@ -185,7 +192,9 @@ def scgd_train_orf(
                         f"{orf_nlml_true:14.4f}\t"
                         f"{approx_nlml:11.4f}\t"
                         f"{F_error.item():9.3e}\t"
-                        f"{grad_norm:9.3e}"
+                        f"{grad_norm:9.3e}\t"
+                        f"{iter_duration:8.3f}\t"
+                        f"{wall_elapsed:10.3f}"
                     )
 
     return w, rho, sigma2, F_tilde

@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 
@@ -73,7 +74,9 @@ def train_bsgd_neurips(
     jitter = 1e-6
 
     print("\n=== BSGD (biased SGD on exact kernel) ===")
-    print("iter\tepoch\tσ_f²\tσ_ε²\treal_nlml\tmini_nlml\t||grad||")
+    print("iter\tepoch\tσ_f²\tσ_ε²\treal_nlml\tmini_nlml\t||grad||\tduration_s\twall_time_s")
+
+    run_start = time.perf_counter()
 
     for epoch in range(n_epochs):
         perm = torch.randperm(n, device=device)
@@ -82,6 +85,7 @@ def train_bsgd_neurips(
             if batch_idx.numel() == 0:
                 continue
 
+            iter_start = time.perf_counter()
             global_step += 1
             m = batch_idx.numel()
             s1 = 3.0 * math.log(m)
@@ -93,6 +97,9 @@ def train_bsgd_neurips(
             theta = theta.clamp(min=theta_min, max=theta_max)
 
             if global_step % print_every == 0:
+                now = time.perf_counter()
+                iter_duration = now - iter_start
+                wall_elapsed = now - run_start
                 sigma_f2 = theta[0].item()
                 sigma_eps2 = theta[1].item()
                 real_nlml = exact_nlml_from_precomputed(K_f, y, sigma_f2, sigma_eps2, jitter=jitter)
@@ -103,7 +110,8 @@ def train_bsgd_neurips(
                 print(
                     f"{global_step:4d}\t{epoch+1:2d}\t"
                     f"{sigma_f2:7.4f}\t{sigma_eps2:7.4f}\t"
-                    f"{real_nlml:9.4f}\t{mini_nlml:9.4f}\t{grad_norm:9.3e}"
+                    f"{real_nlml:9.4f}\t{mini_nlml:9.4f}\t"
+                    f"{grad_norm:9.3e}\t{iter_duration:8.3f}\t{wall_elapsed:10.3f}"
                 )
 
     return theta
