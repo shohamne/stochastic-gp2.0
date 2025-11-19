@@ -55,6 +55,8 @@ def run_bsgd(args):
         theta_min=args.theta_min,
         theta_max=args.theta_max,
         print_every=args.print_every,
+        sigma_f2_true=args.sigma_f2_true,
+        sigma_eps2_true=args.sigma_eps2_true,
     )
     print(
         "\n[BSGD] Finished on device {} -> σ_f² ≈ {:.4f}, σ_ε² ≈ {:.4f}".format(

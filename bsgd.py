@@ -64,6 +64,8 @@ def train_bsgd_neurips(
     theta_min: float = 1e-4,
     theta_max: float = 20.0,
     print_every: int = 1,
+    sigma_f2_true: float | None = None,
+    sigma_eps2_true: float | None = None,
 ):
     device = K_f.device
     n = y.shape[0]
@@ -74,7 +76,11 @@ def train_bsgd_neurips(
     jitter = 1e-6
 
     print("\n=== BSGD (biased SGD on exact kernel) ===")
-    print("iter\tepoch\tσ_f²\tσ_ε²\treal_nlml\tmini_nlml\t||grad||\tduration_s\twall_time_s")
+    print(
+        "iter\tepoch\tσ_f²\tσ_ε²\t"
+        "real_nlml\treal_nlml_true\tmini_nlml\t"
+        "||grad||\tduration_s\twall_time_s"
+    )
 
     run_start = time.perf_counter()
 
@@ -103,14 +109,21 @@ def train_bsgd_neurips(
                 sigma_f2 = theta[0].item()
                 sigma_eps2 = theta[1].item()
                 real_nlml = exact_nlml_from_precomputed(K_f, y, sigma_f2, sigma_eps2, jitter=jitter)
+                if (sigma_f2_true is not None) and (sigma_eps2_true is not None):
+                    real_nlml_true = exact_nlml_from_precomputed(
+                        K_f, y, float(sigma_f2_true), float(sigma_eps2_true), jitter=jitter
+                    )
+                else:
+                    real_nlml_true = float("nan")
                 mini_nlml = minibatch_nlml_from_precomputed(
                     K_f, y, sigma_f2, sigma_eps2, batch_idx, jitter=jitter
                 )
-                grad_norm = grad.norm().item()
+                full_grad = full_gradient_exact(K_f, y, theta, jitter=jitter)
+                grad_norm = full_grad.norm().item()
                 print(
                     f"{global_step:4d}\t{epoch+1:2d}\t"
                     f"{sigma_f2:7.4f}\t{sigma_eps2:7.4f}\t"
-                    f"{real_nlml:9.4f}\t{mini_nlml:9.4f}\t"
+                    f"{real_nlml:9.4f}\t{real_nlml_true:14.4f}\t{mini_nlml:9.4f}\t"
                     f"{grad_norm:9.3e}\t{iter_duration:8.3f}\t{wall_elapsed:10.3f}"
                 )
 

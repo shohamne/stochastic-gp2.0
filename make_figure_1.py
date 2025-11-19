@@ -165,6 +165,14 @@ def make_figure1_from_df(
                     df_seed["sigma_eps2"].to_numpy(dtype=float)
                 )
 
+                trim = min(smooth_window, len(x))
+                if trim >= len(x):
+                    continue
+                if trim > 0:
+                    x = x[:-trim]
+                    sigma_f2 = sigma_f2[:-trim]
+                    sigma_eps2 = sigma_eps2[:-trim]
+
                 color = seed_to_color.get(seed, "C0")
                 ax.plot(
                     x,
@@ -283,7 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--smooth-window",
         type=int,
-        default=1,
+        default=200,
         help=(
             "Moving-average window size (in iterations) applied to each "
             "trajectory before plotting (default: 1, i.e., no smoothing)."
