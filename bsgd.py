@@ -78,7 +78,7 @@ def train_bsgd_neurips(
     print("\n=== BSGD (biased SGD on exact kernel) ===")
     print(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
-        "real_nlml\treal_nlml_true\tmini_nlml\t"
+        "real_nlml\treal_nlml_true\treal_nlml_abs_err\tmini_nlml\t"
         "||grad||\tduration_s\twall_time_s"
     )
 
@@ -115,6 +115,7 @@ def train_bsgd_neurips(
                     )
                 else:
                     real_nlml_true = float("nan")
+                real_nlml_abs_err = abs(real_nlml - real_nlml_true)
                 mini_nlml = minibatch_nlml_from_precomputed(
                     K_f, y, sigma_f2, sigma_eps2, batch_idx, jitter=jitter
                 )
@@ -123,7 +124,7 @@ def train_bsgd_neurips(
                 print(
                     f"{global_step:4d}\t{epoch+1:2d}\t"
                     f"{sigma_f2:7.4f}\t{sigma_eps2:7.4f}\t"
-                    f"{real_nlml:9.4f}\t{real_nlml_true:14.4f}\t{mini_nlml:9.4f}\t"
+                    f"{real_nlml:9.4f}\t{real_nlml_true:14.4f}\t{real_nlml_abs_err:16.4f}\t{mini_nlml:9.4f}\t"
                     f"{grad_norm:9.3e}\t{iter_duration:8.3f}\t{wall_elapsed:10.3f}"
                 )
 

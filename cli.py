@@ -27,6 +27,8 @@ def _prepare_data(args):
         sigma_eps2=args.sigma_eps2_true,
         device=device,
         seed=args.seed,
+        cluster_strength=args.cluster_strength,
+        heterogeneity=args.heterogeneity,
     )
     return device, X, y, K_f
 
@@ -170,10 +172,34 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
     parser.add_argument("--sigma-eps2-true", type=float, default=1.0, help="Ground-truth σ_ε² used to sample data.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for data and ORF features.")
     parser.add_argument(
+        "--cluster-strength",
+        type=float,
+        default=1.0,
+        help=(
+            "Controls how concentrated the inputs x_i are. 1.0 reproduces the "
+            "original GP setup; values > 1 shrink the input cloud, making the "
+            "RBF kernel increasingly globally correlated (near low-rank). "
+            "In that regime, ORF-based SCGD/MINIMAX tend to outperform BSGD."
+        ),
+    )
+    parser.add_argument(
         "--device",
         default="auto",
         choices=("auto", "cpu", "cuda"),
         help="Computation device. 'auto' selects CUDA when available.",
+    )
+    parser.add_argument(
+        "--heterogeneity",
+        type=float,
+        default=0.0,
+        help=(
+            "Controls multi-cluster / multi-scale structure of X. "
+            "0.0 = original single Gaussian cloud. Larger values create "
+            "two clusters with different densities and separation, producing "
+            "a heterogeneous kernel that favors ORF-based methods (SCGD / "
+            "MINIMAX) over submatrix-based BSGD, in a way that changing the "
+            "RBF lengthscale alone cannot fix."
+        ),
     )
 
 

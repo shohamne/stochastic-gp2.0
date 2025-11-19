@@ -112,11 +112,11 @@ def main() -> None:
 
     # Common GP setup (matches Section 7.1 / Figures 1-2 in the paper).
     common_gp_flags = (
-        "--n 1024 "
+        "--n 4000 "
         "--lengthscale 0.5 "
         "--sigma-f2-true 4.0 "
         "--sigma-eps2-true 1.0 "
-        "--n-epochs 200 "
+        "--n-epochs 50 "
         f"--device {device} "
     )
 
@@ -199,7 +199,7 @@ def main() -> None:
                 "--a 1e-3 "
                 "--b 1e-3 "
                 "--lr-decay 0.95 "
-                "--lr-decay-start-epoch 25 "
+                "--lr-decay-start-epoch 5 "
                 f"--sigma-f2-init {cfg['sigma_f2_init']} "
                 f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
                 "--w-init-scale 0.1 "
@@ -228,7 +228,7 @@ def main() -> None:
                 "--b0 0.9 "
                 "--a-decay 0.75 "
                 "--b-decay 0.25 "
-                "--decay-start-epoch 25 "
+                "--decay-start-epoch 5 "
                 f"--sigma-f2-init {cfg['sigma_f2_init']} "
                 f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
                 "--w-init-scale 0.1 "

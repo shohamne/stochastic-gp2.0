@@ -62,8 +62,8 @@ def scgd_train_orf(
     print("\n=== SCGD + ORF (TMLR Algorithm 2) ===")
     print(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
-        "real_nlml\torf_nlml\t"
-        "real_nlml_true\torf_nlml_true\t"
+        "real_nlml\treal_nlml_true\treal_nlml_abs_err\t"
+        "orf_nlml\torf_nlml_true\t"
         "approx_nlml\t|F~ - F|/|F|\t||grad||\tduration_s\twall_time_s"
     )
 
@@ -156,6 +156,7 @@ def scgd_train_orf(
                         real_nlml_true = float("nan")
                         orf_nlml_true = float("nan")
 
+                    real_nlml_abs_err = abs(real_nlml - real_nlml_true)
                     amp2 = torch.exp(0.5 * rho)
                     Z_scaled = amp2 * Z_base
                     F_full = Z_scaled.T @ Z_scaled + sigma_eps2 * eye_d
@@ -187,8 +188,9 @@ def scgd_train_orf(
                         f"{total_steps:4d}\t{epoch+1:2d}\t"
                         f"{sigma_f2.item():7.4f}\t{sigma_eps2.item():7.4f}\t"
                         f"{real_nlml:9.4f}\t"
-                        f"{orf_nlml:9.4f}\t"
                         f"{real_nlml_true:14.4f}\t"
+                        f"{real_nlml_abs_err:16.4f}\t"
+                        f"{orf_nlml:9.4f}\t"
                         f"{orf_nlml_true:14.4f}\t"
                         f"{approx_nlml:11.4f}\t"
                         f"{F_error.item():9.3e}\t"

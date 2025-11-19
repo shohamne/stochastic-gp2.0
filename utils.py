@@ -24,23 +24,87 @@ def generate_gp_data(
     sigma_eps2: float = 1.0,
     device: str | None = None,
     seed: int = 0,
+    cluster_strength: float = 1.0,
+    heterogeneity: float = 0.0,
 ):
     """
-    x_i ~ N(0, 5^2), kernel: k(x,x') = σ_f² k_f(x,x') + σ_ε² δ.
+    Synthetic GP data with optional input heterogeneity and a knob that
+    globally concentrates the input cloud.
+
+    Base case (cluster_strength = 1.0, heterogeneity = 0.0):
+      x_i ~ N(0, 5^2), kernel: k(x,x') = σ_f² k_f(x,x') + σ_ε² δ.
+      This reproduces the original NeurIPS setup.
+
+    Cluster-strength effect (cluster_strength > 1.0):
+      Shrinks the entire input cloud relative to the RBF lengthscale,
+      yielding a more globally correlated / near low-rank kernel. This
+      regime favors ORF-based SCGD / MINIMAX over submatrix BSGD.
+
+    Heterogeneous case (heterogeneity > 0):
+      Mixture of two 1D Gaussian clusters with different scales and centers.
+      As `heterogeneity` increases:
+        - Cluster centers move further apart,
+        - One cluster becomes denser/narrower, the other wider,
+      which induces a more realistic, block / multi-scale kernel structure.
+      This structure is harder for submatrix-based BSGD, but still well
+      handled by global ORF approximations (SCGD / MINIMAX), and cannot
+      be "fixed" simply by changing the RBF lengthscale.
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     torch.manual_seed(seed)
+    cluster_strength = float(cluster_strength)
+    if cluster_strength <= 0.0:
+        raise ValueError("cluster_strength must be positive.")
+    base_std = 5.0 / cluster_strength
 
-    X = 5.0 * torch.randn(n, 1, device=device)
+    # --- Input distribution ---
+    if heterogeneity <= 0.0:
+        # Original setup: single wide Gaussian cloud
+        X = base_std * torch.randn(n, 1, device=device)
+    else:
+        heterogeneity = float(heterogeneity)
+        scale = 1.0 / cluster_strength
+
+        # Fraction of points assigned to the second (wider) cluster.
+        # Grows with heterogeneity but capped at 40%.
+        frac2 = min(0.4, 0.1 + 0.3 * heterogeneity)
+        n2 = max(1, int(frac2 * n))
+        n1 = max(1, n - n2)
+
+        # Cluster separation grows with heterogeneity
+        base_sep = 10.0
+        sep = base_sep * (1.0 + heterogeneity)
+
+        # Cluster centers
+        c1 = -0.5 * sep * scale
+        c2 = +0.5 * sep * scale
+
+        # Within-cluster stds: one dense, one wide
+        std1 = (2.5 / (1.0 + 0.5 * heterogeneity)) * scale  # denser as heterogeneity grows
+        std2 = (5.0 * (1.0 + 0.5 * heterogeneity)) * scale  # wider as heterogeneity grows
+
+        X1 = c1 + std1 * torch.randn(n1, 1, device=device)
+        X2 = c2 + std2 * torch.randn(n2, 1, device=device)
+        X = torch.cat([X1, X2], dim=0)
+
+        # Shuffle so indices are not ordered by cluster
+        perm = torch.randperm(X.shape[0], device=device)
+        X = X[perm]
+
+        # If we overshot n due to max(1, ·) safeguards, trim back to n
+        if X.shape[0] > n:
+            X = X[:n]
+
+    # --- GP kernel & outputs (unchanged logic) ---
     K_f = rbf_kernel(X, X, lengthscale)
-    eye_n = torch.eye(n, device=device)
+    eye_n = torch.eye(X.shape[0], device=device)
     K = sigma_f2 * K_f + sigma_eps2 * eye_n
 
     jitter = 1e-6
     L = torch.linalg.cholesky(K + jitter * eye_n)
-    y = L @ torch.randn(n, 1, device=device)
+    y = L @ torch.randn(X.shape[0], 1, device=device)
     y = y.squeeze(-1)
     return X, y, K_f
 
