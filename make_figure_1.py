@@ -44,6 +44,7 @@ def make_figure1_from_df(
     df,
     output: str | Path = "neurips_figure1_all_algos.png",
     smooth_window: int = 1,
+    batch_size: int | None = 128,
 ) -> None:
     """
     Create a 3x3 panel plot:
@@ -57,29 +58,40 @@ def make_figure1_from_df(
     if df.empty:
         raise RuntimeError("DataFrame is empty – no stdout logs found.")
 
-    # Keep only the GP setup used in Figures 1–2.
-    mask_common = (
-        (df["n"] == 1024)
-        & (df["lengthscale"] == 0.5)
-        & (df["sigma_f2_true"] == 4.0)
-        & (df["sigma_eps2_true"] == 1.0)
-        & (df["batch_size"] == 128)
-    )
-    df = df[mask_common].copy()
+    if batch_size is not None:
+        if "batch_size" not in df.columns:
+            raise RuntimeError(
+                "DataFrame is missing the 'batch_size' column; cannot filter runs."
+            )
+        df = df[df["batch_size"] == batch_size].copy()
+        if df.empty:
+            raise RuntimeError(
+                f"No rows left after filtering to batch_size == {batch_size}."
+            )
 
-    # Some SCGD directories hit filesystem filename limits, which truncated the
-    # literal "--sigma-eps2-init <value>" argument down to "--sigma-eps2-init 3."
-    # or "--sigma-eps2-init 0.".  That in turn makes the parsed metadata show
-    # values 3.0 and 0.0 even though the intended initializations were 3.5 and
-    # 0.7.  Since all ambiguous SCGD runs use σ_f²_init = 2.5, we can safely fix
-    # them up here before applying per-configuration filters.
-    scgd_fixups = [
-        {"sigma_f2_init": 2.5, "observed_eps2": 3.0, "corrected_eps2": 3.5},
-        {"sigma_f2_init": 2.5, "observed_eps2": 0.0, "corrected_eps2": 0.7},
+    # Some SCGD/MINIMAX directories hit filesystem filename limits, which
+    # truncated "--sigma-eps2-init <value>" down to "--sigma-eps2-init 3."/
+    # "0.". That in turn makes the parsed metadata show 3.0 / 0.0 even though
+    # the intended initializations were 3.5 / 0.7.  Since all ambiguous runs
+    # use σ_f²_init = 2.5, we can safely fix them up here before applying
+    # per-configuration filters.
+    truncated_init_fixups = [
+        {
+            "algos": ("scgd", "minimax"),
+            "sigma_f2_init": 2.5,
+            "observed_eps2": 3.0,
+            "corrected_eps2": 3.5,
+        },
+        {
+            "algos": ("scgd", "minimax"),
+            "sigma_f2_init": 2.5,
+            "observed_eps2": 0.0,
+            "corrected_eps2": 0.7,
+        },
     ]
-    for fix in scgd_fixups:
+    for fix in truncated_init_fixups:
         mask_fix = (
-            (df["algo"] == "scgd")
+            df["algo"].isin(fix["algos"])
             & np.isclose(df["sigma_f2_init"], fix["sigma_f2_init"])
             & np.isclose(df["sigma_eps2_init"], fix["observed_eps2"])
         )
@@ -87,9 +99,10 @@ def make_figure1_from_df(
 
     # For Figure 1 we only use the long 200-epoch runs (one iteration per epoch)
     # while keeping the batch size at 128 across all algorithms.
-    df_bsgd = df[(df["algo"] == "bsgd") & (df["n_epochs"] == 200)]
-    df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == 200)]
-    df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == 200)]
+    N_EPOCHS = 50
+    df_bsgd = df[(df["algo"] == "bsgd") & (df["n_epochs"] == N_EPOCHS)]
+    df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == N_EPOCHS)]
+    df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == N_EPOCHS)]
 
     algo_to_df = {
         "bsgd": df_bsgd,
@@ -104,6 +117,14 @@ def make_figure1_from_df(
             return y
         kernel = np.ones(smooth_window, dtype=float) / smooth_window
         return np.convolve(y, kernel, mode="same")
+
+    required_init_cols = ("sigma_f2_init", "sigma_eps2_init")
+    missing_init_cols = [col for col in required_init_cols if col not in df.columns]
+    if missing_init_cols:
+        cols = ", ".join(missing_init_cols)
+        raise RuntimeError(
+            f"DataFrame is missing required initialization metadata: {cols}"
+        )
 
     fig, axes = plt.subplots(
         nrows=len(ALGO_ORDER),
@@ -195,23 +216,36 @@ def make_figure1_from_df(
                 y_max = max(y_max, sigma_f2.max(), sigma_eps2.max())
 
             # Ground-truth horizontal lines
-            sigma_f2_true = float(df_cfg["sigma_f2_true"].iloc[0])
-            sigma_eps2_true = float(df_cfg["sigma_eps2_true"].iloc[0])
+            def _unique_scalar(df_section, column: str) -> float | None:
+                if column not in df_section.columns:
+                    return None
+                values = df_section[column].dropna().unique()
+                if len(values) != 1:
+                    return None
+                try:
+                    return float(values[0])
+                except (TypeError, ValueError):
+                    return None
 
-            ax.axhline(
-                sigma_f2_true,
-                color="k",
-                linestyle="-",
-                linewidth=1.0,
-                alpha=0.9,
-            )
-            ax.axhline(
-                sigma_eps2_true,
-                color="k",
-                linestyle=":",
-                linewidth=1.0,
-                alpha=0.9,
-            )
+            sigma_f2_true = _unique_scalar(df_cfg, "sigma_f2_true")
+            sigma_eps2_true = _unique_scalar(df_cfg, "sigma_eps2_true")
+
+            if sigma_f2_true is not None:
+                ax.axhline(
+                    sigma_f2_true,
+                    color="k",
+                    linestyle="-",
+                    linewidth=1.0,
+                    alpha=0.9,
+                )
+            if sigma_eps2_true is not None:
+                ax.axhline(
+                    sigma_eps2_true,
+                    color="k",
+                    linestyle=":",
+                    linewidth=1.0,
+                    alpha=0.9,
+                )
 
             # Titles: top row gets θ⁽⁰⁾ labels
             if row_idx == 0:
@@ -279,7 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res/results/1"),
+        default=Path("res-3/results/1"),
         help="Base directory containing stdout logs (default: res/results/1).",
     )
     parser.add_argument(
@@ -295,6 +329,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Moving-average window size (in iterations) applied to each "
             "trajectory before plotting (default: 1, i.e., no smoothing)."
+        ),
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=128,
+        help=(
+            "Minibatch size that runs must match to be included. "
+            "Set to another value (or -1) to select different runs; "
+            "use -1 to disable batch-size filtering."
         ),
     )
     return parser
@@ -313,6 +357,7 @@ def main() -> None:
         df,
         output=args.output,
         smooth_window=args.smooth_window,
+        batch_size=None if args.batch_size == -1 else args.batch_size,
     )
 
 

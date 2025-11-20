@@ -20,6 +20,8 @@ def minimax_train_orf(
     n_epochs: int = 25,
     batch_size: int = 128,
     mu: float = 1.0,
+    mu_increase_factor: float = 1.0,
+    mu_increase_epochs: int = 0,
     a: float = 1e-3,
     b: float = 1e-3,
     lr_decay: float = 1.0,
@@ -39,6 +41,8 @@ def minimax_train_orf(
     Learning rates a (MIN) and b (MAX) can be exponentially decayed each
     iteration via lr_decay once epoch lr_decay_start_epoch is reached;
     lr_decay=1.0 (or lr_decay_start_epoch <= 1) reproduces the original schedule.
+    μ can optionally be multiplied by `mu_increase_factor` every
+    `mu_increase_epochs` epochs to gradually tighten the penalty.
     """
     device = Z_base.device
     n, d = Z_base.shape
@@ -61,6 +65,11 @@ def minimax_train_orf(
     lr_scale = 1.0
     last_lr_scale = lr_scale
     decay_active = lr_decay_start_epoch <= 1
+    mu_current = float(mu)
+    mu_increase_epochs = max(0, int(mu_increase_epochs))
+    if mu_increase_factor <= 0:
+        raise ValueError("mu_increase_factor must be positive.")
+    mu_increase_factor = float(mu_increase_factor)
 
     print("\n=== MINIMAX + ORF (TMLR) ===")
     print(
@@ -110,7 +119,7 @@ def minimax_train_orf(
                     + ((n - d) / n) * torch.log(sigma2)
                 )
                 Fi = torch.ger(phi_i, phi_i) + (sigma2 / n) * eye_d
-                penalty_i = mu * torch.sum(B * ((A / n) - Fi)) / (A_norm + 1e-12)
+                penalty_i = mu_current * torch.sum(B * ((A / n) - Fi)) / (A_norm + 1e-12)
                 psi_i = gi + (logdetA / n) + penalty_i
                 psi_min = psi_min + psi_i
 
@@ -153,7 +162,7 @@ def minimax_train_orf(
                     + ((n - d) / n) * torch.log(sigma2)
                 )
                 Fi = torch.ger(phi_i, phi_i) + (sigma2 / n) * eye_d
-                penalty_i = mu * torch.sum(B * ((A / n) - Fi)) / (A_norm + 1e-12)
+                penalty_i = mu_current * torch.sum(B * ((A / n) - Fi)) / (A_norm + 1e-12)
                 psi_i = gi + (logdetA / n) + penalty_i
                 psi_max = psi_max + psi_i
 
@@ -221,13 +230,13 @@ def minimax_train_orf(
                     norm_B = B.norm()
 
                     penalty_norm = norm_delta / (norm_A + 1e-12)
-                    l_mu_total = g_theta + logdetA_now + mu * penalty_norm
+                    l_mu_total = g_theta + logdetA_now + mu_current * penalty_norm
                     l_mu = (l_mu_total / n).item()
 
                     if norm_delta > 1e-12 and norm_B > 1e-12:
                         cos_B_delta = (B * delta_AF).sum() / (norm_B * norm_delta + 1e-12)
-                        penalty_curr = mu * (B * delta_AF).sum() / (norm_A + 1e-12)
-                        penalty_max = mu * norm_delta / (norm_A + 1e-12)
+                        penalty_curr = mu_current * (B * delta_AF).sum() / (norm_A + 1e-12)
+                        penalty_max = mu_current * norm_delta / (norm_A + 1e-12)
                         pen_ratio = (penalty_curr / (penalty_max + 1e-12)).item()
                         cos_val = cos_B_delta.item()
                     else:
@@ -261,6 +270,16 @@ def minimax_train_orf(
                         f"{iter_duration:8.3f}\t"
                         f"{wall_elapsed:10.3f}"
                     )
+
+        if (
+            mu_increase_epochs > 0
+            and ((epoch + 1) % mu_increase_epochs == 0)
+            and mu_increase_factor != 1.0
+        ):
+            mu_current *= mu_increase_factor
+            print(
+                f"[MINIMAX] Epoch {epoch+1}: increased μ to {mu_current:.6f}"
+            )
 
     return w, rho, sigma2, A, B
 

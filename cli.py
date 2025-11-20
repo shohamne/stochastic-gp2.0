@@ -84,6 +84,8 @@ def run_minimax(args):
         n_epochs=args.n_epochs,
         batch_size=args.batch_size,
         mu=args.mu,
+        mu_increase_factor=args.mu_increase_factor,
+        mu_increase_epochs=args.mu_increase_epochs,
         a=args.a,
         b=args.b,
         lr_decay=args.lr_decay,
@@ -245,6 +247,18 @@ def build_parser() -> argparse.ArgumentParser:
     minimax_parser.add_argument("--n-epochs", type=int, default=25)
     minimax_parser.add_argument("--batch-size", type=int, default=128)
     minimax_parser.add_argument("--mu", type=float, default=1.0)
+    minimax_parser.add_argument(
+        "--mu-increase-factor",
+        type=float,
+        default=1.0,
+        help="Multiplicative factor applied to μ when increases trigger.",
+    )
+    minimax_parser.add_argument(
+        "--mu-increase-epochs",
+        type=int,
+        default=0,
+        help="Every this many epochs, multiply μ by the specified factor (0 disables).",
+    )
     minimax_parser.add_argument("--a", type=float, default=1e-3, help="Step size for MIN step.")
     minimax_parser.add_argument("--b", type=float, default=1e-3, help="Step size for MAX step.")
     minimax_parser.add_argument(

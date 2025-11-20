@@ -112,11 +112,11 @@ def main() -> None:
 
     # Common GP setup (matches Section 7.1 / Figures 1-2 in the paper).
     common_gp_flags = (
-        "--n 4000 "
+        "--n 1024 "
         "--lengthscale 0.5 "
         "--sigma-f2-true 4.0 "
         "--sigma-eps2-true 1.0 "
-        "--n-epochs 50 "
+        "--n-epochs 200 "
         f"--device {device} "
     )
 
@@ -168,7 +168,6 @@ def main() -> None:
                 f"{py} {cli} bsgd "
                 f"{common_gp_flags}"
                 f"--seed {seed} "
-                "--n-epochs 200 "
                 "--batch-size 128 "
                 f"--sigma-f2-init {cfg['sigma_f2_init']} "
                 f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
@@ -255,7 +254,7 @@ def main() -> None:
     print("# Figure 2: BSGD gradient-norm experiment (exact reproduction)")
     print("# ------------------------------------------------------------------")
 
-    m_list = [64, 32, 16]
+    m_list = [256, 512, 1024]
     for m in m_list:
         for seed in seeds:
             log_path = logdir / f"fig2_bsgd_m{m}_seed{seed}.log"
@@ -264,7 +263,6 @@ def main() -> None:
                 f"{common_gp_flags}"
                 f"--seed {seed} "
                 f"--batch-size {m} "
-                "--n-epochs 25 "
                 "--sigma-f2-init 5.0 "
                 "--sigma-eps2-init 3.0 "
                 "--alpha1 9.0 "
