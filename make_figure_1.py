@@ -99,7 +99,7 @@ def make_figure1_from_df(
 
     # For Figure 1 we only use the long 200-epoch runs (one iteration per epoch)
     # while keeping the batch size at 128 across all algorithms.
-    N_EPOCHS = 50
+    N_EPOCHS = 200
     df_bsgd = df[(df["algo"] == "bsgd") & (df["n_epochs"] == N_EPOCHS)]
     df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == N_EPOCHS)]
     df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == N_EPOCHS)]
@@ -313,7 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-3/results/1"),
+        default=Path("res-5/results/1"),
         help="Base directory containing stdout logs (default: res/results/1).",
     )
     parser.add_argument(
@@ -325,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--smooth-window",
         type=int,
-        default=200,
+        default=1,
         help=(
             "Moving-average window size (in iterations) applied to each "
             "trajectory before plotting (default: 1, i.e., no smoothing)."

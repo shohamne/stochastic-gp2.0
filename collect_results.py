@@ -62,7 +62,30 @@ def coerce_scalar(value: str | None) -> Any:
         return value
 
 
-def parse_command_metadata(run_dir: Path) -> dict[str, Any]:
+def extract_command_from_stdout(stdout_path: Path) -> str | None:
+    """Extract the full command from the first line of stdout file if available."""
+    try:
+        with stdout_path.open("r", encoding="utf-8") as fh:
+            first_line = fh.readline()
+        # Look for command in quotes, e.g., '[GPU X][JOB Y] 'command''
+        if "'" in first_line:
+            start = first_line.find("'")
+            end = first_line.rfind("'")
+            if start < end:
+                return first_line[start + 1 : end]
+        # Alternative: look for python cli.py pattern
+        if "python" in first_line and "cli.py" in first_line:
+            # Try to extract from the line
+            parts = first_line.split("'")
+            for part in parts:
+                if "cli.py" in part:
+                    return part.strip()
+    except Exception:
+        pass
+    return None
+
+
+def parse_command_metadata(run_dir: Path, stdout_path: Path | None = None) -> dict[str, Any]:
     command_str = run_dir.name
     tokens = shlex.split(command_str)
     meta: dict[str, Any] = {
@@ -85,6 +108,28 @@ def parse_command_metadata(run_dir: Path) -> dict[str, Any]:
                 i += 1
             meta[key] = coerce_scalar(value)
         i += 1
+    
+    # If critical parameters are missing and we have stdout_path, try parsing from stdout
+    if stdout_path is not None:
+        stdout_cmd = extract_command_from_stdout(stdout_path)
+        if stdout_cmd:
+            stdout_tokens = shlex.split(stdout_cmd)
+            # Fill in missing parameters from stdout command
+            i = 0
+            while i < len(stdout_tokens):
+                token = stdout_tokens[i]
+                if token.startswith("--"):
+                    key = token[2:].replace("-", "_")
+                    # Only fill if missing or None
+                    if key not in meta or meta[key] is None:
+                        value = None
+                        if i + 1 < len(stdout_tokens) and not stdout_tokens[i + 1].startswith("--"):
+                            value = stdout_tokens[i + 1]
+                            i += 1
+                        if value is not None:
+                            meta[key] = coerce_scalar(value)
+                i += 1
+    
     meta = {k: v for k, v in meta.items() if v is not None}
     meta["algo"] = meta.get("algo", "unknown")
     return meta
@@ -124,7 +169,12 @@ def parse_table(path: Path) -> list[dict[str, Any]]:
     headers = [normalize_header(token) for token in raw_header]
     for line in lines[header_idx + 1 :]:
         stripped = line.strip()
-        if not stripped or stripped.startswith("["):
+        if not stripped:
+            break
+        # Skip informational lines like "[MINIMAX] Epoch X: increased μ to Y"
+        if stripped.startswith("[MINIMAX]") and "increased" in stripped:
+            continue
+        if stripped.startswith("["):
             break
         tokens = line.split()
         if len(tokens) < len(headers):
@@ -146,7 +196,7 @@ def collect_stdout_logs(root: Path = DEFAULT_ROOT) -> pd.DataFrame:
         table_rows = parse_table(stdout_path)
         if not table_rows:
             continue
-        meta = parse_command_metadata(stdout_path.parent)
+        meta = parse_command_metadata(stdout_path.parent, stdout_path=stdout_path)
         meta["stdout_path"] = str(stdout_path)
         for row in table_rows:
             record = {**meta, **row}

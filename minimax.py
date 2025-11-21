@@ -76,7 +76,7 @@ def minimax_train_orf(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
         "real_nlml\treal_nlml_true\treal_nlml_abs_err\t"
         "orf_nlml\torf_nlml_true\t"
-        "ℓ_μ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\t"
+        "ℓ_μ\tμ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\t"
         "lr_scale\t||grad||\tduration_s\twall_time_s"
     )
 
@@ -261,6 +261,7 @@ def minimax_train_orf(
                         f"{orf_nlml:9.4f}\t"
                         f"{orf_nlml_true:14.4f}\t"
                         f"{l_mu:7.4f}\t"
+                        f"{mu_current:7.4f}\t"
                         f"{penalty_norm.item():9.3e}\t"
                         f"{norm_B.item():7.4f}\t"
                         f"{cos_val:7.4f}\t"
@@ -277,9 +278,6 @@ def minimax_train_orf(
             and mu_increase_factor != 1.0
         ):
             mu_current *= mu_increase_factor
-            print(
-                f"[MINIMAX] Epoch {epoch+1}: increased μ to {mu_current:.6f}"
-            )
 
     return w, rho, sigma2, A, B
 
