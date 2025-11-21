@@ -120,6 +120,97 @@ def main() -> None:
         f"--device {device} "
     )
 
+    algo_common_flags = {
+        "bsgd": (
+            "--theta-min 1e-4 "
+            "--theta-max 20.0 "
+            "--print-every 1 "
+        ),
+        "minimax": (
+            "--a 1e-3 "
+            "--b 1e-3 "
+            "--w-init-scale 0.1 "
+            "--num-features 128 "
+            "--print-every 1 "
+            "--mu-increase-factor 1.5 "
+            "--mu-increase-epochs 10 "
+        ),
+        "scgd": (
+            "--a0 1e-3 "
+            "--a-decay 0.75 "
+            "--w-init-scale 0.1 "
+            "--num-features 128 "
+            "--print-every 1 "
+        ),
+    }
+
+    def build_algo_cmd(algo: str, extra_flags: str) -> str:
+        algo_flags = algo_common_flags.get(algo, "")
+        return (
+            f"{py} {cli} {algo} "
+            f"{common_gp_flags}"
+            f"{algo_flags}"
+            f"{extra_flags}"
+        )
+
+    def build_algo_extra_flags(
+        algo: str,
+        *,
+        cfg: dict[str, float] | None,
+        seed: int,
+        batch_size: int,
+        sigma_f2_init: float | None = None,
+        sigma_eps2_init: float | None = None,
+    ) -> str:
+        if sigma_f2_init is None:
+            if cfg is None or "sigma_f2_init" not in cfg:
+                raise ValueError(f"Missing sigma_f2_init for {algo}")
+            sigma_f2_init = cfg["sigma_f2_init"]
+        if sigma_eps2_init is None:
+            if cfg is None or "sigma_eps2_init" not in cfg:
+                raise ValueError(f"Missing sigma_eps2_init for {algo}")
+            sigma_eps2_init = cfg["sigma_eps2_init"]
+
+        flags = [
+            f"--seed {seed}",
+            f"--batch-size {batch_size}",
+        ]
+
+        if algo == "bsgd":
+            if cfg is None or "alpha1" not in cfg:
+                raise ValueError("BSGD requires alpha1 in cfg")
+            flags.extend(
+                [
+                    f"--sigma-f2-init {sigma_f2_init}",
+                    f"--sigma-eps2-init {sigma_eps2_init}",
+                    f"--alpha1 {cfg['alpha1']}",
+                ]
+            )
+        elif algo == "minimax":
+            flags.extend(
+                [
+                    "--mu 2.0",
+                    "--lr-decay 0.97",
+                    "--lr-decay-start-epoch 25",
+                    f"--sigma-f2-init {sigma_f2_init}",
+                    f"--sigma-eps2-init {sigma_eps2_init}",
+                ]
+            )
+        elif algo == "scgd":
+            flags.extend(
+                [
+                    "--b0 0.9",
+                    "--b-decay 0.25",
+                    "--decay-start-epoch 25",
+                    f"--sigma-f2-init {sigma_f2_init}",
+                    f"--sigma-eps2-init {sigma_eps2_init}",
+                ]
+            )
+        else:
+            raise ValueError(f"Unknown algorithm: {algo}")
+
+        return " ".join(flags) + " "
+
     # ------------------------------------------------------------------
     # Figure 1: parameter convergence for ALL algorithms
     # ------------------------------------------------------------------
@@ -164,19 +255,10 @@ def main() -> None:
     for cfg in init_configs:
         for seed in seeds:
             log_path = logdir / f"fig1_bsgd_{cfg['name']}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} bsgd "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                "--batch-size 128 "
-                f"--sigma-f2-init {cfg['sigma_f2_init']} "
-                f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
-                f"--alpha1 {cfg['alpha1']} "
-                "--theta-min 1e-4 "
-                "--theta-max 20.0 "
-                "--print-every 1 "
+            extra_flags = build_algo_extra_flags(
+                "bsgd", cfg=cfg, seed=seed, batch_size=128
             )
-            print(cmd)
+            print(build_algo_cmd("bsgd", extra_flags))
     print()
 
     # -----------------------------
@@ -189,23 +271,10 @@ def main() -> None:
     for cfg in init_configs:
         for seed in seeds:
             log_path = logdir / f"fig1_minimax_{cfg['name']}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} minimax "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                "--batch-size 128 "
-                "--mu 2.0 "
-                "--a 1e-3 "
-                "--b 1e-3 "
-                "--lr-decay 0.95 "
-                "--lr-decay-start-epoch 5 "
-                f"--sigma-f2-init {cfg['sigma_f2_init']} "
-                f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
-                "--w-init-scale 0.1 "
-                "--num-features 128 "
-                "--print-every 1 "
+            extra_flags = build_algo_extra_flags(
+                "minimax", cfg=cfg, seed=seed, batch_size=128
             )
-            print(cmd)
+            print(build_algo_cmd("minimax", extra_flags))
     print()
 
     # -----------------------------
@@ -218,59 +287,37 @@ def main() -> None:
     for cfg in init_configs:
         for seed in seeds:
             log_path = logdir / f"fig1_scgd_{cfg['name']}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} scgd "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                "--batch-size 128 "
-                "--a0 1e-3 "
-                "--b0 0.9 "
-                "--a-decay 0.75 "
-                "--b-decay 0.25 "
-                "--decay-start-epoch 5 "
-                f"--sigma-f2-init {cfg['sigma_f2_init']} "
-                f"--sigma-eps2-init {cfg['sigma_eps2_init']} "
-                "--w-init-scale 0.1 "
-                "--num-features 128 "
-                "--print-every 1 "
+            extra_flags = build_algo_extra_flags(
+                "scgd", cfg=cfg, seed=seed, batch_size=128
             )
-            print(cmd)
+            print(build_algo_cmd("scgd", extra_flags))
     print()
 
     # ------------------------------------------------------------------
-    # Figure 2: full gradient vs minibatch size – BSGD (exact reproduction)
+    # Figure 2: full gradient vs minibatch size – BSGD
     # ------------------------------------------------------------------
     #
-    # This is *exactly* the experiment in experiments.run_neurips_figure2_experiment
-    # and the "figure2" subcommand in cli.py:
-    #   * m_list = (64, 32, 16)
-    #   * n = 1024, lengthscale = 0.5
-    #   * true σ_f² = 4, σ_ε² = 1
-    #   * 25 epochs, 10 repetitions (internal seeds 0..9)
-    #
-    # It saves a single PNG with 3 panels (one per minibatch size).
+    # Matches the Figure‑1 setup for every other hyperparameter; only the
+    # minibatch size and (σ_f², σ_ε²) initializations are different.
     #
     print("# ------------------------------------------------------------------")
-    print("# Figure 2: BSGD gradient-norm experiment (exact reproduction)")
+    print("# Figure 2: BSGD gradient-norm experiment (match Figure 1 params)")
     print("# ------------------------------------------------------------------")
 
     m_list = [256, 512, 1024]
-    for m in m_list:
-        for seed in seeds:
-            log_path = logdir / f"fig2_bsgd_m{m}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} bsgd "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                f"--batch-size {m} "
-                "--sigma-f2-init 5.0 "
-                "--sigma-eps2-init 3.0 "
-                "--alpha1 9.0 "
-                "--theta-min 1e-4 "
-                "--theta-max 20.0 "
-                "--print-every 1 "
-            )
-            print(cmd)
+    for cfg in init_configs:
+        for m in m_list:
+            for seed in seeds:
+                log_path = logdir / f"fig2_bsgd_{cfg['name']}_m{m}_seed{seed}.log"
+                extra_flags = build_algo_extra_flags(
+                    "bsgd",
+                    cfg=cfg,
+                    seed=seed,
+                    batch_size=m,
+                    sigma_f2_init=5.0,
+                    sigma_eps2_init=3.0,
+                )
+                print(build_algo_cmd("bsgd", extra_flags))
     print()
 
     # ------------------------------------------------------------------
@@ -278,13 +325,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     #
     # We cannot compute the *full GP gradient* for MINIMAX / SCGD without
-    # adding new instrumentation. However, it is still useful to run them
-    # in the same (n, lengthscale, σ_f², σ_ε²) regime for different m.
-    #
-    # Below we generate runs where we simply vary --batch-size in {64, 32, 16}
-    # and keep n_epochs = 25. You can parse their logs and, e.g., visualize:
-    #   - σ_f² / σ_ε² vs iteration
-    #   - approximate NLML, |A-F|/|A|, |F~ - F|/|F|, etc.
+    # adding new instrumentation. However, we still run them in the exact
+    # Figure‑1 configuration and only change the batch size (and optionally
+    # the θ initialization) so every other hyperparameter matches Figure 1.
     #
     print("# ------------------------------------------------------------------")
     print("# OPTIONAL: Figure-2-style runs for MINIMAX (varying minibatch size)")
@@ -292,24 +335,15 @@ def main() -> None:
     for m in m_list:
         for seed in seeds:
             log_path = logdir / f"fig2_minimax_m{m}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} minimax "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                f"--batch-size {m} "
-                "--n-epochs 25 "
-                "--mu 1.0 "
-                "--a 1e-3 "
-                "--b 1e-3 "
-                "--lr-decay 1.0 "
-                "--lr-decay-start-epoch 25 "
-                "--sigma-f2-init 5.0 "
-                "--sigma-eps2-init 3.0 "
-                "--w-init-scale 0.1 "
-                "--num-features 128 "
-                "--print-every 1 "
+            extra_flags = build_algo_extra_flags(
+                "minimax",
+                cfg=None,
+                seed=seed,
+                batch_size=m,
+                sigma_f2_init=5.0,
+                sigma_eps2_init=3.0,
             )
-            print(cmd)
+            print(build_algo_cmd("minimax", extra_flags))
     print()
 
     print("# ------------------------------------------------------------------")
@@ -318,24 +352,15 @@ def main() -> None:
     for m in m_list:
         for seed in seeds:
             log_path = logdir / f"fig2_scgd_m{m}_seed{seed}.log"
-            cmd = (
-                f"{py} {cli} scgd "
-                f"{common_gp_flags}"
-                f"--seed {seed} "
-                f"--batch-size {m} "
-                "--n-epochs 25 "
-                "--a0 1e-3 "
-                "--b0 1e-3 "
-                "--a-decay 0.75 "
-                "--b-decay 0.5 "
-                "--decay-start-epoch 25 "
-                "--sigma-f2-init 5.0 "
-                "--sigma-eps2-init 3.0 "
-                "--w-init-scale 0.1 "
-                "--num-features 128 "
-                "--print-every 1 "
+            extra_flags = build_algo_extra_flags(
+                "scgd",
+                cfg=None,
+                seed=seed,
+                batch_size=m,
+                sigma_f2_init=5.0,
+                sigma_eps2_init=3.0,
             )
-            print(cmd)
+            print(build_algo_cmd("scgd", extra_flags))
     print()
 
     print("# End of generated commands.")
