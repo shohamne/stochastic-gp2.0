@@ -135,16 +135,16 @@ def main() -> None:
             "--print-every 1 "
         ),
         "minimax": (
-            "--a 1e-3 "
+            "--a 1e-4 "
             "--b 1e-3 "
             "--w-init-scale 0.1 "
             "--num-features 128 "
             "--print-every 1 "
-            "--mu-increase-factor 1.5 "
-            "--mu-increase-epochs 10 "
+            "--mu-increase-factor 1.0 "
+            "--mu-increase-epochs 0 "
         ),
         "scgd": (
-            "--a0 1e-3 "
+            "--a0 2e-3 "
             "--a-decay 0.75 "
             "--w-init-scale 0.1 "
             "--num-features 128 "

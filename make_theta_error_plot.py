@@ -39,6 +39,75 @@ ALGO_TITLES = {
 }
 
 
+def _print_data_description(df, batch_size: int | None) -> None:
+    """Print a short textual description of the dataframe being plotted."""
+    batch_label = "any" if batch_size is None else str(batch_size)
+    total_rows = len(df)
+    has_seed = "seed" in df.columns
+    n_seeds = df["seed"].nunique() if has_seed else "n/a"
+    iter_min = df["iter"].min() if "iter" in df.columns else None
+    iter_max = df["iter"].max() if "iter" in df.columns else None
+
+    print("[Theta Error] Data description:")
+    print(f"  Batch-size filter : {batch_label}")
+    print(f"  Rows / unique seeds: {total_rows:,} / {n_seeds}")
+    if iter_min is not None and iter_max is not None:
+        print(f"  Iteration range   : {int(iter_min)} – {int(iter_max)}")
+
+    algo_counts = df["algo"].value_counts(sort=False) if "algo" in df.columns else {}
+    for algo in ALGO_ORDER:
+        if algo in algo_counts:
+            seed_count = (
+                df[df["algo"] == algo]["seed"].nunique() if has_seed else "n/a"
+            )
+            print(
+                f"    {ALGO_TITLES[algo]:<20} · rows={int(algo_counts[algo]):,}, "
+                f"seeds={seed_count}"
+            )
+
+    if {"sigma_f2_init", "sigma_eps2_init"} <= set(df.columns) and has_seed:
+        init_counts = (
+            df.groupby(["sigma_f2_init", "sigma_eps2_init"])
+            .agg(rows=("iter", "size"), seeds=("seed", "nunique"))
+            .reset_index()
+            .sort_values(["sigma_f2_init", "sigma_eps2_init"])
+        )
+        for row in init_counts.itertuples(index=False):
+            print(
+                "    Init σ_f²={:.2g}, σ_ε²={:.2g}: rows={}, seeds={}".format(
+                    row.sigma_f2_init, row.sigma_eps2_init, int(row.rows), int(row.seeds)
+                )
+            )
+
+
+def _print_result_summary(panel_summaries: list[dict]) -> None:
+    """Print final mean ± std for each panel that was rendered."""
+    print("[Theta Error] Result summary:")
+    if not panel_summaries:
+        print("  No valid panels — nothing to summarize.")
+        return
+
+    algo_rank = {algo: idx for idx, algo in enumerate(ALGO_ORDER)}
+    init_rank = {cfg["name"]: idx for idx, cfg in enumerate(INIT_CONFIGS)}
+    panel_summaries.sort(
+        key=lambda entry: (
+            algo_rank.get(entry["algo"], len(ALGO_ORDER)),
+            init_rank.get(entry["init"], len(INIT_CONFIGS)),
+        )
+    )
+
+    for entry in panel_summaries:
+        mean_val = entry["final_mean"]
+        std_val = entry["final_std"]
+        mean_str = f"{mean_val:.3g}" if np.isfinite(mean_val) else "n/a"
+        std_str = f"{std_val:.3g}" if np.isfinite(std_val) else "n/a"
+        print(
+            f"  - {ALGO_TITLES.get(entry['algo'], entry['algo'])} | {entry['init']}: "
+            f"{entry['n_seeds']} seeds, {entry['n_iters']} iters, "
+            f"final mean ± std = {mean_str} ± {std_str}"
+        )
+
+
 def _nan_moving_average(y: np.ndarray, window: int) -> np.ndarray:
     """NaN-aware moving average."""
     if window <= 1:
@@ -110,6 +179,7 @@ def make_theta_error_plot_from_df(
             raise RuntimeError(
                 f"No rows left after filtering to batch_size == {batch_size}."
             )
+    _print_data_description(df, batch_size)
 
     truncated_init_fixups = [
         {
@@ -155,6 +225,8 @@ def make_theta_error_plot_from_df(
     )
 
     y_min, y_max = np.inf, -np.inf
+
+    panel_summaries: list[dict] = []
 
     for row_idx, algo in enumerate(ALGO_ORDER):
         df_algo = algo_to_df[algo]
@@ -225,6 +297,7 @@ def make_theta_error_plot_from_df(
             if finite_indices.size:
                 final_idx = finite_indices[-1]
                 final_mean = float(mean_err[final_idx])
+                final_std = float(std_err[final_idx])
                 ax.axhline(
                     final_mean,
                     color="k",
@@ -249,11 +322,25 @@ def make_theta_error_plot_from_df(
                     ),
                     clip_on=False,
                 )
+            else:
+                final_mean = np.nan
+                final_std = np.nan
 
             panel_y_min = np.nanmin(lower)
             panel_y_max = np.nanmax(upper)
             y_min = min(y_min, panel_y_min)
             y_max = max(y_max, panel_y_max)
+
+            panel_summaries.append(
+                {
+                    "algo": algo,
+                    "init": cfg["name"],
+                    "n_seeds": pivot.shape[1],
+                    "n_iters": pivot.shape[0],
+                    "final_mean": final_mean,
+                    "final_std": final_std,
+                }
+            )
 
             if row_idx == 0:
                 ax.set_title(cfg["name"])
@@ -295,6 +382,7 @@ def make_theta_error_plot_from_df(
     output = Path(output)
     fig.savefig(output, dpi=150)
     print(f"[Theta Error] Saved plot to {output}")
+    _print_result_summary(panel_summaries)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -307,8 +395,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-5/results/1"),
-        help="Base directory containing stdout logs (default: res/results/1).",
+        default=Path("res-9"),
+        help="Base directory containing stdout logs (default: res-9).",
     )
     parser.add_argument(
         "--output",

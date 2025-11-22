@@ -216,7 +216,12 @@ def parse_table(path: Path) -> list[dict[str, Any]]:
 def collect_stdout_logs(root: Path = DEFAULT_ROOT) -> pd.DataFrame:
     require_pandas()
     records: list[dict[str, Any]] = []
-    log_files = discover_log_files(root)
+
+    if root.is_file():
+        log_files = [(root, "single")]
+    else:
+        log_files = discover_log_files(root)
+
     for stdout_path, structure_type in log_files:
         table_rows = parse_table(stdout_path)
         if not table_rows:
