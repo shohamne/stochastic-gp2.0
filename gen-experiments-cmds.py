@@ -123,7 +123,7 @@ def main() -> None:
         "--lengthscale 0.5 "
         "--sigma-f2-true 4.0 "
         "--sigma-eps2-true 1.0 "
-        "--n-epochs 200 "
+        "--n-epochs 2000 "
         f"--device {device} "
         f"--kernel-mode {kernel_mode} "
     )
@@ -144,7 +144,7 @@ def main() -> None:
             "--mu-increase-epochs 0 "
         ),
         "scgd": (
-            "--a0 1e-3 "
+            "--a0 3e-3 "
             "--a-decay 0.75 "
             "--w-init-scale 0.1 "
             "--num-features 128 "
@@ -207,7 +207,7 @@ def main() -> None:
         elif algo == "scgd":
             flags.extend(
                 [
-                    "--b0 0.9",
+                    "--b0 0.1",
                     "--b-decay 0.25",
                     "--decay-start-epoch 0",
                     f"--sigma-f2-init {sigma_f2_init}",
