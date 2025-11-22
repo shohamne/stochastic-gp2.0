@@ -144,7 +144,7 @@ def main() -> None:
             "--mu-increase-epochs 0 "
         ),
         "scgd": (
-            "--a0 2e-3 "
+            "--a0 1e-3 "
             "--a-decay 0.75 "
             "--w-init-scale 0.1 "
             "--num-features 128 "
