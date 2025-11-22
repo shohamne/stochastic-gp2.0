@@ -209,7 +209,7 @@ def main() -> None:
                 [
                     "--b0 0.9",
                     "--b-decay 0.25",
-                    "--decay-start-epoch 25",
+                    "--decay-start-epoch 0",
                     f"--sigma-f2-init {sigma_f2_init}",
                     f"--sigma-eps2-init {sigma_eps2_init}",
                 ]
