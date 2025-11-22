@@ -9,6 +9,8 @@ from minimax import minimax_train_orf
 from scgd import scgd_train_orf
 from utils import exact_nlml_gradients, generate_gp_data, orf_features
 
+_PHI_MODE_ALIASES = {"phi", "finite", "feature"}
+
 
 def _resolve_device(requested: str) -> str:
     if requested == "auto":
@@ -18,9 +20,56 @@ def _resolve_device(requested: str) -> str:
     return requested
 
 
+def _normalize_kernel_mode(mode: str) -> str:
+    return (mode or "rbf").lower()
+
+
+def _is_phi_mode(mode: str) -> bool:
+    return _normalize_kernel_mode(mode) in _PHI_MODE_ALIASES
+
+
+def _fork_rng_for_device(device: torch.device):
+    if device.type == "cuda":
+        idx = device.index if device.index is not None else torch.cuda.current_device()
+        return torch.random.fork_rng(devices=[idx])
+    return torch.random.fork_rng()
+
+
+def _build_phi_feature_map(args):
+    num_features = args.phi_num_features
+    if num_features <= 0:
+        raise ValueError("--phi-num-features must be positive when kernel_mode='phi'.")
+
+    phi_seed = args.phi_seed if args.phi_seed is not None else args.seed
+    phi_lengthscale = (
+        args.phi_lengthscale if args.phi_lengthscale is not None else args.lengthscale
+    )
+
+    def phi_fn(X: torch.Tensor) -> torch.Tensor:
+        device = X.device
+        with _fork_rng_for_device(device):
+            torch.manual_seed(phi_seed)
+            Z_base, _, _ = orf_features(
+                X,
+                num_features=num_features,
+                lengthscale=phi_lengthscale,
+                seed=phi_seed,
+            )
+        return Z_base
+
+    return phi_fn
+
+
 def _prepare_data(args):
     device = _resolve_device(args.device)
-    X, y, K_f = generate_gp_data(
+    kernel_mode = args.kernel_mode
+    phi_fn = None
+    return_phi = False
+    if _is_phi_mode(kernel_mode):
+        phi_fn = _build_phi_feature_map(args)
+        return_phi = True
+
+    data = generate_gp_data(
         n=args.n,
         lengthscale=args.lengthscale,
         sigma_f2=args.sigma_f2_true,
@@ -29,8 +78,16 @@ def _prepare_data(args):
         seed=args.seed,
         cluster_strength=args.cluster_strength,
         heterogeneity=args.heterogeneity,
+        kernel_mode=kernel_mode,
+        phi=phi_fn,
+        return_phi=return_phi,
     )
-    return device, X, y, K_f
+    if return_phi:
+        X, y, K_f, Z = data
+    else:
+        X, y, K_f = data
+        Z = None
+    return device, X, y, K_f, Z
 
 
 def _prepare_orf_features(X, lengthscale: float, num_features: int, seed: int):
@@ -45,7 +102,7 @@ def _prepare_orf_features(X, lengthscale: float, num_features: int, seed: int):
 
 
 def run_bsgd(args):
-    device, _, y, K_f = _prepare_data(args)
+    device, _, y, K_f, _ = _prepare_data(args)
     theta = train_bsgd_neurips(
         K_f,
         y,
@@ -68,13 +125,17 @@ def run_bsgd(args):
 
 
 def run_minimax(args):
-    device, X, y, K_f = _prepare_data(args)
-    Z_base, K_f_orf = _prepare_orf_features(
-        X,
-        lengthscale=args.lengthscale,
-        num_features=args.num_features,
-        seed=args.seed,
-    )
+    device, X, y, K_f, Z_phi = _prepare_data(args)
+    if Z_phi is not None:
+        Z_base = Z_phi
+        K_f_orf = K_f
+    else:
+        Z_base, K_f_orf = _prepare_orf_features(
+            X,
+            lengthscale=args.lengthscale,
+            num_features=args.num_features,
+            seed=args.seed,
+        )
     w, rho, sigma2, A, B = minimax_train_orf(
         Z_base,
         X,
@@ -108,13 +169,17 @@ def run_minimax(args):
 
 
 def run_scgd(args):
-    device, X, y, K_f = _prepare_data(args)
-    Z_base, K_f_orf = _prepare_orf_features(
-        X,
-        lengthscale=args.lengthscale,
-        num_features=args.num_features,
-        seed=args.seed,
-    )
+    device, X, y, K_f, Z_phi = _prepare_data(args)
+    if Z_phi is not None:
+        Z_base = Z_phi
+        K_f_orf = K_f
+    else:
+        Z_base, K_f_orf = _prepare_orf_features(
+            X,
+            lengthscale=args.lengthscale,
+            num_features=args.num_features,
+            seed=args.seed,
+        )
     w, rho, sigma2, F_tilde = scgd_train_orf(
         Z_base,
         X,
@@ -146,7 +211,7 @@ def run_scgd(args):
 
 
 def run_nlml_grad(args):
-    device, _, y, K_f = _prepare_data(args)
+    device, _, y, K_f, _ = _prepare_data(args)
     nlml, grad_rho, grad_sigma2 = exact_nlml_gradients(
         K_f,
         y,
@@ -201,6 +266,41 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
             "a heterogeneous kernel that favors ORF-based methods (SCGD / "
             "MINIMAX) over submatrix-based BSGD, in a way that changing the "
             "RBF lengthscale alone cannot fix."
+        ),
+    )
+    parser.add_argument(
+        "--kernel-mode",
+        default="rbf",
+        choices=tuple(sorted(_PHI_MODE_ALIASES | {"rbf"})),
+        help=(
+            "Kernel used by generate_gp_data. 'rbf' reproduces the original "
+            "exact RBF GP. 'phi'/'finite'/'feature' switch to a finite feature "
+            "map so that K_f = φ(X) φ(X)^T."
+        ),
+    )
+    parser.add_argument(
+        "--phi-num-features",
+        type=int,
+        default=128,
+        help=(
+            "Feature dimension d for kernel_mode='phi'. Ignored for kernel_mode='rbf'."
+        ),
+    )
+    parser.add_argument(
+        "--phi-lengthscale",
+        type=float,
+        default=None,
+        help=(
+            "Lengthscale used when constructing φ(X) (defaults to --lengthscale "
+            "when omitted)."
+        ),
+    )
+    parser.add_argument(
+        "--phi-seed",
+        type=int,
+        default=None,
+        help=(
+            "Random seed for the φ feature map; defaults to --seed when not provided."
         ),
     )
 
