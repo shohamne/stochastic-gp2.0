@@ -1,6 +1,7 @@
 import math
 
 import torch
+from collections.abc import Callable
 
 
 torch.set_default_dtype(torch.float64)
@@ -26,6 +27,10 @@ def generate_gp_data(
     seed: int = 0,
     cluster_strength: float = 1.0,
     heterogeneity: float = 0.0,
+    *,
+    kernel_mode: str = "rbf",
+    phi: Callable[[torch.Tensor], torch.Tensor] | None = None,
+    return_phi: bool = False,
 ):
     """
     Synthetic GP data with optional input heterogeneity and a knob that
@@ -49,6 +54,20 @@ def generate_gp_data(
       This structure is harder for submatrix-based BSGD, but still well
       handled by global ORF approximations (SCGD / MINIMAX), and cannot
       be "fixed" simply by changing the RBF lengthscale.
+
+    New behaviour:
+
+      - kernel_mode = "rbf" (default, backward compatible):
+          Use the exact RBF kernel k_f(x,x') with the given lengthscale,
+          exactly as in the original implementation.
+
+      - kernel_mode = "phi":
+          Use a user-supplied feature map phi(X) of shape (n, d), and set
+              K_f = Z @ Z.T,  where Z = phi(X).
+          This corresponds to a finite-dimensional kernel
+              k(x,y) = φ(x)^T φ(y).
+          If `return_phi=True`, return (X, y, K_f, Z); otherwise, return
+          (X, y, K_f) to keep compatibility with the "rbf" mode.
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -59,7 +78,7 @@ def generate_gp_data(
         raise ValueError("cluster_strength must be positive.")
     base_std = 5.0 / cluster_strength
 
-    # --- Input distribution ---
+    # --- Input distribution (unchanged logic) ---
     if heterogeneity <= 0.0:
         # Original setup: single wide Gaussian cloud
         X = base_std * torch.randn(n, 1, device=device)
@@ -97,16 +116,46 @@ def generate_gp_data(
         if X.shape[0] > n:
             X = X[:n]
 
-    # --- GP kernel & outputs (unchanged logic) ---
-    K_f = rbf_kernel(X, X, lengthscale)
-    eye_n = torch.eye(X.shape[0], device=device)
+    # --- Kernel construction: RBF vs finite φ(x) ---
+    kernel_mode_norm = kernel_mode.lower()
+    Z = None
+
+    if kernel_mode_norm == "rbf":
+        # Original NeurIPS / Chen setup: exact RBF kernel on X
+        K_f = rbf_kernel(X, X, lengthscale)
+    elif kernel_mode_norm in {"phi", "finite", "feature"}:
+        if phi is None:
+            raise ValueError(
+                "kernel_mode='phi' requires a feature map "
+                "`phi(X: Tensor) -> Tensor` so that k(x,y) = phi(x)^T phi(y)."
+            )
+        Z = phi(X)  # expected shape: (n, d)
+        if Z.ndim != 2 or Z.shape[0] != X.shape[0]:
+            raise ValueError(
+                f"`phi(X)` must have shape (n, d); got {tuple(Z.shape)} for n={X.shape[0]}"
+            )
+        # Finite-dimensional kernel matrix
+        K_f = Z @ Z.T
+    else:
+        raise ValueError("kernel_mode must be 'rbf' or 'phi' (or 'finite'/'feature').")
+
+    # --- GP covariance & output sample (unchanged formula) ---
+    n_eff = X.shape[0]
+    eye_n = torch.eye(n_eff, device=device, dtype=K_f.dtype)
     K = sigma_f2 * K_f + sigma_eps2 * eye_n
 
     jitter = 1e-6
     L = torch.linalg.cholesky(K + jitter * eye_n)
-    y = L @ torch.randn(X.shape[0], 1, device=device)
+    y = L @ torch.randn(n_eff, 1, device=device)
     y = y.squeeze(-1)
-    return X, y, K_f
+
+    # Backward-compatible return type:
+    # - "rbf" mode OR not asking for features -> (X, y, K_f)
+    # - finite-φ mode with return_phi=True    -> (X, y, K_f, Z)
+    if (kernel_mode_norm == "rbf") or (not return_phi):
+        return X, y, K_f
+    else:
+        return X, y, K_f, Z
 
 
 # -------------------------------------------------------------------

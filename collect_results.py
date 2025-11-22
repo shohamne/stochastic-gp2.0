@@ -86,8 +86,9 @@ def extract_command_from_stdout(stdout_path: Path) -> str | None:
 
 
 def parse_command_metadata(run_dir: Path, stdout_path: Path | None = None) -> dict[str, Any]:
-    command_str = run_dir.name
-    tokens = shlex.split(command_str)
+    stdout_cmd = extract_command_from_stdout(stdout_path) if stdout_path else None
+    command_str = stdout_cmd or run_dir.name
+    tokens = shlex.split(command_str) if command_str else []
     meta: dict[str, Any] = {
         "command_str": command_str,
         "algo": None,
@@ -133,6 +134,29 @@ def parse_command_metadata(run_dir: Path, stdout_path: Path | None = None) -> di
     meta = {k: v for k, v in meta.items() if v is not None}
     meta["algo"] = meta.get("algo", "unknown")
     return meta
+
+
+def discover_log_files(root: Path) -> list[tuple[Path, str]]:
+    """Return candidate log files along with their structure type."""
+    legacy: list[tuple[Path, str]] = [
+        (path, "legacy") for path in root.glob("**/stdout") if path.is_file()
+    ]
+    results_dirs: set[Path] = set()
+    if root.is_dir() and root.name == "results":
+        results_dirs.add(root)
+    for results_dir in root.glob("**/results"):
+        if results_dir.is_dir():
+            results_dirs.add(results_dir)
+    flat: list[tuple[Path, str]] = []
+    for results_dir in results_dirs:
+        for candidate in results_dir.iterdir():
+            if candidate.is_file() and candidate.name.isdigit():
+                flat.append((candidate, "flat"))
+    if not legacy and not flat:
+        return []
+    combined = legacy + flat
+    combined.sort(key=lambda item: str(item[0]))
+    return combined
 
 
 def parse_table(path: Path) -> list[dict[str, Any]]:
@@ -192,12 +216,14 @@ def parse_table(path: Path) -> list[dict[str, Any]]:
 def collect_stdout_logs(root: Path = DEFAULT_ROOT) -> pd.DataFrame:
     require_pandas()
     records: list[dict[str, Any]] = []
-    for stdout_path in sorted(root.glob("**/stdout")):
+    log_files = discover_log_files(root)
+    for stdout_path, structure_type in log_files:
         table_rows = parse_table(stdout_path)
         if not table_rows:
             continue
         meta = parse_command_metadata(stdout_path.parent, stdout_path=stdout_path)
         meta["stdout_path"] = str(stdout_path)
+        meta["structure_type"] = structure_type
         for row in table_rows:
             record = {**meta, **row}
             records.append(record)

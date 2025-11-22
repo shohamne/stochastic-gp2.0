@@ -76,7 +76,7 @@ def minimax_train_orf(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
         "real_nlml\treal_nlml_true\treal_nlml_abs_err\t"
         "orf_nlml\torf_nlml_true\t"
-        "ℓ_μ\tμ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\t"
+        "ℓ_μ\t|A-F|/|A|\t|B|\tcosBΔ\tpen/pen*\t"
         "lr_scale\t||grad||\tduration_s\twall_time_s"
     )
 

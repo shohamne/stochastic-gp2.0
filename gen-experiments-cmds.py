@@ -81,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="figures",
         help="Directory where Figure 2 images will be written.",
     )
+    p.add_argument(
+        "--kernel-mode",
+        default="finite",
+        choices=("rbf", "phi", "finite", "feature"),
+        help="Kernel mode passed through to cli.py (default: rbf).",
+    )
     return p
 
 
@@ -109,6 +115,7 @@ def main() -> None:
     cli = args.cli_path
     device = args.device
     n_reps = args.n_reps
+    kernel_mode = args.kernel_mode
 
     # Common GP setup (matches Section 7.1 / Figures 1-2 in the paper).
     common_gp_flags = (
@@ -118,6 +125,7 @@ def main() -> None:
         "--sigma-eps2-true 1.0 "
         "--n-epochs 200 "
         f"--device {device} "
+        f"--kernel-mode {kernel_mode} "
     )
 
     algo_common_flags = {
