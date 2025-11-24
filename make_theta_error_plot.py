@@ -137,6 +137,21 @@ def _smooth_columns(values: np.ndarray, window: int) -> np.ndarray:
     return smoothed
 
 
+def _nan_running_min(values: np.ndarray) -> np.ndarray:
+    """Running min that ignores NaNs until a finite value appears."""
+    arr = np.asarray(values, dtype=float)
+    running = np.full_like(arr, np.nan, dtype=float)
+    best = np.inf
+    has_value = False
+    for idx, val in enumerate(arr):
+        if np.isfinite(val):
+            best = val if not has_value else min(best, val)
+            has_value = True
+        if has_value:
+            running[idx] = best
+    return running
+
+
 def make_theta_error_plot_from_df(
     df,
     output: str | Path = "theta_error_mean_std.png",
@@ -276,6 +291,7 @@ def make_theta_error_plot_from_df(
 
             mean_err = np.nanmean(values, axis=1)
             std_err = np.nanstd(values, axis=1, ddof=1)
+            running_best = _nan_running_min(mean_err)
 
             iters = pivot.index.to_numpy(dtype=float)
 
@@ -292,6 +308,15 @@ def make_theta_error_plot_from_df(
                 linewidth=0.0,
                 label="±1 std",
             )
+            if np.isfinite(running_best).any():
+                ax.plot(
+                    iters,
+                    running_best,
+                    color="C1",
+                    linewidth=1.2,
+                    linestyle="--",
+                    label="Best-so-far mean",
+                )
 
             finite_indices = np.where(np.isfinite(mean_err))[0]
             if finite_indices.size:
@@ -328,6 +353,9 @@ def make_theta_error_plot_from_df(
 
             panel_y_min = np.nanmin(lower)
             panel_y_max = np.nanmax(upper)
+            if np.isfinite(running_best).any():
+                panel_y_min = min(panel_y_min, np.nanmin(running_best))
+                panel_y_max = max(panel_y_max, np.nanmax(running_best))
             y_min = min(y_min, panel_y_min)
             y_max = max(y_max, panel_y_max)
 
@@ -366,8 +394,14 @@ def make_theta_error_plot_from_df(
 
     handles, labels = [], []
     if any(ax.get_visible() for ax in fig.axes):
-        handles = [plt.Line2D([0], [0], color="C0", linewidth=1.5)]
-        labels = [r"Mean $\|\theta^{(k)} - \theta\|_2$"]
+        handles = [
+            plt.Line2D([0], [0], color="C0", linewidth=1.5),
+            plt.Line2D([0], [0], color="C1", linewidth=1.2, linestyle="--"),
+        ]
+        labels = [
+            r"Mean $\|\theta^{(k)} - \theta\|_2$",
+            r"Best-so-far mean $\|\theta^{(k)} - \theta\|_2$",
+        ]
 
     if handles:
         fig.legend(
@@ -395,7 +429,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-9"),
+        default=Path("res-11"),
         help="Base directory containing stdout logs (default: res-9).",
     )
     parser.add_argument(

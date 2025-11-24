@@ -30,6 +30,7 @@ def scgd_train_orf(
     sigma_f2_true: float | None = None,
     sigma_eps2_true: float | None = None,
     print_every: int = 1,
+    warm_start_w: bool = True,
 ):
     """
     SCGD Algorithm 2 from TMLR, specialized to ORF GP:
@@ -54,8 +55,22 @@ def scgd_train_orf(
     rho = torch.tensor(math.log(sigma_f2_init), device=device, requires_grad=True)
     sigma2 = torch.tensor(sigma_eps2_init, device=device, requires_grad=True)
 
-    # SPD tracker F~_0
-    F_tilde = (sigma_eps2_init * eye_d).clone()
+    # SPD tracker F~_0 initialized from the full dataset statistic
+    with torch.no_grad():
+        amp0 = torch.exp(0.5 * rho)
+        phi_full0 = amp0 * Z_base
+        sigma_eps2_0 = sigma2.clamp(min=1e-4)
+        F_tilde = (phi_full0.T @ phi_full0 + sigma_eps2_0 * eye_d).clone()
+        if warm_start_w:
+            # Warm-start w with ridge-style solve to avoid large initial residuals
+            try:
+                rhs0 = phi_full0.T @ y
+                L0 = torch.linalg.cholesky(F_tilde + jitter * eye_d)
+                w_ls = torch.cholesky_solve(rhs0.unsqueeze(1), L0).squeeze(1)
+                w.copy_(w_ls)
+            except RuntimeError:
+                # Fall back to random initialization if the system is ill-conditioned
+                pass
 
     total_steps = 0
 
@@ -64,7 +79,7 @@ def scgd_train_orf(
         "iter\tepoch\tσ_f²\tσ_ε²\t"
         "real_nlml\treal_nlml_true\treal_nlml_abs_err\t"
         "orf_nlml\torf_nlml_true\t"
-        "approx_nlml\t|F~ - F|/|F|\t||grad||\tduration_s\twall_time_s"
+        "approx_nlml\t|F~ - F|/|F|\t||grad||\t||∇_w||\tduration_s\twall_time_s"
     )
 
     run_start = time.perf_counter()
@@ -120,6 +135,7 @@ def scgd_train_orf(
             psi_batch = loss_g + penalty_sum
             psi_scaled = (n / m) * psi_batch
             psi_scaled.backward()
+            grad_w_norm = w.grad.norm().item()
 
             with torch.no_grad():
                 w -= a_t * w.grad
@@ -130,7 +146,8 @@ def scgd_train_orf(
                 w.clamp_(-10.0, 10.0)
 
                 # Exponential tracking of F(θ_t): F~_{t+1}
-                F_tilde.mul_(1.0 - b_t).add_((n / m) * F_i_sum.detach())
+                # SCGD tracker update: convex combo of previous estimate and minibatch stat
+                F_tilde.mul_(1.0 - b_t).add_(b_t * (n / m) * F_i_sum.detach())
 
             # ---------- Logging ----------
             if total_steps % print_every == 0:
@@ -195,6 +212,7 @@ def scgd_train_orf(
                         f"{approx_nlml:11.4f}\t"
                         f"{F_error.item():9.3e}\t"
                         f"{grad_norm:9.3e}\t"
+                        f"{grad_w_norm:9.3e}\t"
                         f"{iter_duration:8.3f}\t"
                         f"{wall_elapsed:10.3f}"
                     )

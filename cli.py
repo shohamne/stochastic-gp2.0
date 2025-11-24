@@ -199,6 +199,7 @@ def run_scgd(args):
         sigma_f2_true=args.sigma_f2_true,
         sigma_eps2_true=args.sigma_eps2_true,
         print_every=args.print_every,
+        warm_start_w=args.warm_start_w,
     )
     sigma_f2 = torch.exp(rho).item()
     sigma_eps2 = sigma2.item()
@@ -400,6 +401,12 @@ def build_parser() -> argparse.ArgumentParser:
     scgd_parser.add_argument("--sigma-f2-init", type=float, default=1.0)
     scgd_parser.add_argument("--sigma-eps2-init", type=float, default=1.0)
     scgd_parser.add_argument("--w-init-scale", type=float, default=0.1)
+    scgd_parser.add_argument(
+        "--warm-start-w",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Warm-start w via a ridge solve (pass --no-warm-start-w to disable).",
+    )
     scgd_parser.add_argument("--print-every", type=int, default=1)
     scgd_parser.set_defaults(func=run_scgd)
 

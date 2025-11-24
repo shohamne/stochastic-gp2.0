@@ -208,7 +208,7 @@ def main() -> None:
             flags.extend(
                 [
                     "--b0 0.1",
-                    "--b-decay 0.25",
+                    "--b-decay 0.5",
                     "--decay-start-epoch 0",
                     f"--sigma-f2-init {sigma_f2_init}",
                     f"--sigma-eps2-init {sigma_eps2_init}",

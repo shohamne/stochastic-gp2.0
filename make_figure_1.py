@@ -97,12 +97,11 @@ def make_figure1_from_df(
         )
         df.loc[mask_fix, "sigma_eps2_init"] = fix["corrected_eps2"]
 
-    # For Figure 1 we only use the long 200-epoch runs (one iteration per epoch)
-    # while keeping the batch size at 128 across all algorithms.
-    N_EPOCHS = 200
-    df_bsgd = df[(df["algo"] == "bsgd") & (df["n_epochs"] == N_EPOCHS)]
-    df_minimax = df[(df["algo"] == "minimax") & (df["n_epochs"] == N_EPOCHS)]
-    df_scgd = df[(df["algo"] == "scgd") & (df["n_epochs"] == N_EPOCHS)]
+    # Keep all available runs per algorithm (each run may have a different
+    # number of epochs) while still respecting the batch-size constraint above.
+    df_bsgd = df[df["algo"] == "bsgd"]
+    df_minimax = df[df["algo"] == "minimax"]
+    df_scgd = df[df["algo"] == "scgd"]
 
     algo_to_df = {
         "bsgd": df_bsgd,
@@ -313,8 +312,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-9/results/1"),
-        help="Base directory containing stdout logs (default: res/results/1).",
+        default=Path("res-12"),
+        help="Base directory containing stdout logs (default: res-11).",
     )
     parser.add_argument(
         "--output",

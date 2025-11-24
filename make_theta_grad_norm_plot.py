@@ -6,6 +6,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from collect_results import collect_stdout_logs
 
@@ -281,6 +282,24 @@ def make_theta_grad_norm_plot_from_df(
     print(f"[Theta Grad Norm] Saved plot to {output}")
 
 
+def _load_dataframe(source: Path) -> pd.DataFrame:
+    """
+    Load experiment data either from stdout logs (directory / single file)
+    or from a cached CSV / Parquet dataframe.
+    """
+
+    source = Path(source)
+    if source.is_file():
+        suffix = source.suffix.lower()
+        if suffix == ".csv":
+            print(f"[Theta Grad Norm] Loading cached CSV dataframe from {source} ...")
+            return pd.read_csv(source)
+        if suffix in {".parquet", ".pq"}:
+            print(f"[Theta Grad Norm] Loading cached Parquet dataframe from {source} ...")
+            return pd.read_parquet(source)
+    return collect_stdout_logs(source)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -290,8 +309,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res/results/1"),
-        help="Base directory containing stdout logs (default: res/results/1).",
+        default=Path("res-11/results/1"),
+        help=(
+            "Directory containing stdout logs or a cached CSV / Parquet dataframe "
+            "(default: res-11/results/1)."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -330,7 +352,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    df = collect_stdout_logs(args.root)
+    df = _load_dataframe(args.root)
     if df.empty:
         print(f"No stdout records found under {args.root}")
         return
