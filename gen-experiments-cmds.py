@@ -123,7 +123,7 @@ def main() -> None:
         "--lengthscale 0.5 "
         "--sigma-f2-true 4.0 "
         "--sigma-eps2-true 1.0 "
-        "--n-epochs 2000 "
+        "--n-epochs 200 "
         f"--device {device} "
         f"--kernel-mode {kernel_mode} "
     )
