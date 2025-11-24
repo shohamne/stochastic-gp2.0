@@ -147,6 +147,7 @@ def main() -> None:
             "--a0 3e-3 "
             "--a-decay 0.75 "
             "--w-init-scale 0.1 "
+            "--warm-start-w "
             "--num-features 128 "
             "--print-every 1 "
         ),
