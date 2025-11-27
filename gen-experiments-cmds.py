@@ -123,7 +123,8 @@ def main() -> None:
         "--lengthscale 0.5 "
         "--sigma-f2-true 4.0 "
         "--sigma-eps2-true 1.0 "
-        "--n-epochs 200 "
+        "--n-epochs 1000 "
+        "--print-every 80 "
         f"--device {device} "
         f"--kernel-mode {kernel_mode} "
     )
@@ -142,14 +143,20 @@ def main() -> None:
             "--print-every 1 "
             "--mu-increase-factor 1.0 "
             "--mu-increase-epochs 0 "
+            "--mu 2.0 "
+            "--lr-decay 1.0 "
+            "--lr-decay-start-epoch 0 "
         ),
         "scgd": (
             "--a0 1e-3 "
-            "--a-decay 0.75 "
+            "--b0 0.1 "
+            "--a-decay 0.3 "
+            "--b-decay 0.2 "
             "--w-init-scale 0.1 "
             "--warm-start-w "
             "--num-features 128 "
             "--print-every 1 "
+            "--decay-start-epoch 0 "
         ),
     }
 
@@ -198,9 +205,6 @@ def main() -> None:
         elif algo == "minimax":
             flags.extend(
                 [
-                    "--mu 2.0",
-                    "--lr-decay 1.0",
-                    "--lr-decay-start-epoch 0",
                     f"--sigma-f2-init {sigma_f2_init}",
                     f"--sigma-eps2-init {sigma_eps2_init}",
                 ]
@@ -208,9 +212,6 @@ def main() -> None:
         elif algo == "scgd":
             flags.extend(
                 [
-                    "--b0 0.1",
-                    "--b-decay 0.5",
-                    "--decay-start-epoch 0",
                     f"--sigma-f2-init {sigma_f2_init}",
                     f"--sigma-eps2-init {sigma_eps2_init}",
                 ]
@@ -302,77 +303,77 @@ def main() -> None:
             print(build_algo_cmd("scgd", extra_flags))
     print()
 
-    # ------------------------------------------------------------------
-    # Figure 2: full gradient vs minibatch size – BSGD
-    # ------------------------------------------------------------------
-    #
-    # Matches the Figure‑1 setup for every other hyperparameter; only the
-    # minibatch size and (σ_f², σ_ε²) initializations are different.
-    #
-    print("# ------------------------------------------------------------------")
-    print("# Figure 2: BSGD gradient-norm experiment (match Figure 1 params)")
-    print("# ------------------------------------------------------------------")
+    # # ------------------------------------------------------------------
+    # # Figure 2: full gradient vs minibatch size – BSGD
+    # # ------------------------------------------------------------------
+    # #
+    # # Matches the Figure‑1 setup for every other hyperparameter; only the
+    # # minibatch size and (σ_f², σ_ε²) initializations are different.
+    # #
+    # print("# ------------------------------------------------------------------")
+    # print("# Figure 2: BSGD gradient-norm experiment (match Figure 1 params)")
+    # print("# ------------------------------------------------------------------")
 
-    m_list = [256, 512, 1024]
-    for cfg in init_configs:
-        for m in m_list:
-            for seed in seeds:
-                log_path = logdir / f"fig2_bsgd_{cfg['name']}_m{m}_seed{seed}.log"
-                extra_flags = build_algo_extra_flags(
-                    "bsgd",
-                    cfg=cfg,
-                    seed=seed,
-                    batch_size=m,
-                    sigma_f2_init=5.0,
-                    sigma_eps2_init=3.0,
-                )
-                print(build_algo_cmd("bsgd", extra_flags))
-    print()
+    # m_list = [256, 512, 1024]
+    # for cfg in init_configs:
+    #     for m in m_list:
+    #         for seed in seeds:
+    #             log_path = logdir / f"fig2_bsgd_{cfg['name']}_m{m}_seed{seed}.log"
+    #             extra_flags = build_algo_extra_flags(
+    #                 "bsgd",
+    #                 cfg=cfg,
+    #                 seed=seed,
+    #                 batch_size=m,
+    #                 sigma_f2_init=5.0,
+    #                 sigma_eps2_init=3.0,
+    #             )
+    #             print(build_algo_cmd("bsgd", extra_flags))
+    # print()
 
-    # ------------------------------------------------------------------
-    # Optional: Figure‑2‑style regimes for MINIMAX / SCGD
-    # ------------------------------------------------------------------
-    #
-    # We cannot compute the *full GP gradient* for MINIMAX / SCGD without
-    # adding new instrumentation. However, we still run them in the exact
-    # Figure‑1 configuration and only change the batch size (and optionally
-    # the θ initialization) so every other hyperparameter matches Figure 1.
-    #
-    print("# ------------------------------------------------------------------")
-    print("# OPTIONAL: Figure-2-style runs for MINIMAX (varying minibatch size)")
-    print("# ------------------------------------------------------------------")
-    for m in m_list:
-        for seed in seeds:
-            log_path = logdir / f"fig2_minimax_m{m}_seed{seed}.log"
-            extra_flags = build_algo_extra_flags(
-                "minimax",
-                cfg=None,
-                seed=seed,
-                batch_size=m,
-                sigma_f2_init=5.0,
-                sigma_eps2_init=3.0,
-            )
-            print(build_algo_cmd("minimax", extra_flags))
-    print()
+    # # ------------------------------------------------------------------
+    # # Optional: Figure‑2‑style regimes for MINIMAX / SCGD
+    # # ------------------------------------------------------------------
+    # #
+    # # We cannot compute the *full GP gradient* for MINIMAX / SCGD without
+    # # adding new instrumentation. However, we still run them in the exact
+    # # Figure‑1 configuration and only change the batch size (and optionally
+    # # the θ initialization) so every other hyperparameter matches Figure 1.
+    # #
+    # print("# ------------------------------------------------------------------")
+    # print("# OPTIONAL: Figure-2-style runs for MINIMAX (varying minibatch size)")
+    # print("# ------------------------------------------------------------------")
+    # for m in m_list:
+    #     for seed in seeds:
+    #         log_path = logdir / f"fig2_minimax_m{m}_seed{seed}.log"
+    #         extra_flags = build_algo_extra_flags(
+    #             "minimax",
+    #             cfg=None,
+    #             seed=seed,
+    #             batch_size=m,
+    #             sigma_f2_init=5.0,
+    #             sigma_eps2_init=3.0,
+    #         )
+    #         print(build_algo_cmd("minimax", extra_flags))
+    # print()
 
-    print("# ------------------------------------------------------------------")
-    print("# OPTIONAL: Figure-2-style runs for SCGD (varying minibatch size)")
-    print("# ------------------------------------------------------------------")
-    for m in m_list:
-        for seed in seeds:
-            log_path = logdir / f"fig2_scgd_m{m}_seed{seed}.log"
-            extra_flags = build_algo_extra_flags(
-                "scgd",
-                cfg=None,
-                seed=seed,
-                batch_size=m,
-                sigma_f2_init=5.0,
-                sigma_eps2_init=3.0,
-            )
-            print(build_algo_cmd("scgd", extra_flags))
-    print()
+    # print("# ------------------------------------------------------------------")
+    # print("# OPTIONAL: Figure-2-style runs for SCGD (varying minibatch size)")
+    # print("# ------------------------------------------------------------------")
+    # for m in m_list:
+    #     for seed in seeds:
+    #         log_path = logdir / f"fig2_scgd_m{m}_seed{seed}.log"
+    #         extra_flags = build_algo_extra_flags(
+    #             "scgd",
+    #             cfg=None,
+    #             seed=seed,
+    #             batch_size=m,
+    #             sigma_f2_init=5.0,
+    #             sigma_eps2_init=3.0,
+    #         )
+    #         print(build_algo_cmd("scgd", extra_flags))
+    # print()
 
-    print("# End of generated commands.")
+    # print("# End of generated commands.")
 
 
 if __name__ == "__main__":

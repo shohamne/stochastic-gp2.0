@@ -10,6 +10,10 @@ from scgd import scgd_train_orf
 from utils import exact_nlml_gradients, generate_gp_data, orf_features
 
 _PHI_MODE_ALIASES = {"phi", "finite", "feature"}
+_DTYPE_ALIASES = {
+    "float32": torch.float32,
+    "float64": torch.float64,
+}
 
 
 def _resolve_device(requested: str) -> str:
@@ -26,6 +30,15 @@ def _normalize_kernel_mode(mode: str) -> str:
 
 def _is_phi_mode(mode: str) -> bool:
     return _normalize_kernel_mode(mode) in _PHI_MODE_ALIASES
+
+
+def _set_default_dtype(dtype_name: str) -> torch.dtype:
+    try:
+        dtype = _DTYPE_ALIASES[dtype_name.lower()]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported dtype '{dtype_name}'.") from exc
+    torch.set_default_dtype(dtype)
+    return dtype
 
 
 def _fork_rng_for_device(device: torch.device):
@@ -304,6 +317,15 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
             "Random seed for the φ feature map; defaults to --seed when not provided."
         ),
     )
+    parser.add_argument(
+        "--dtype",
+        default="float64",
+        choices=tuple(_DTYPE_ALIASES.keys()),
+        help=(
+            "Torch default dtype used for data generation and training "
+            "(float32 or float64)."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -436,6 +458,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    dtype = _set_default_dtype(args.dtype)
+    if hasattr(args, "command"):
+        print(f"[CLI] Using torch default dtype {dtype}.")
     args.func(args)
 
 
