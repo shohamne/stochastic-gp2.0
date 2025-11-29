@@ -163,13 +163,17 @@ def run_minimax(args):
         a=args.a,
         b=args.b,
         lr_decay=args.lr_decay,
-        lr_decay_start_epoch=args.lr_decay_start_epoch,
+        lr_decay_every_epochs=args.lr_decay_every_epochs,
         sigma_f2_init=args.sigma_f2_init,
         sigma_eps2_init=args.sigma_eps2_init,
         w_init_scale=args.w_init_scale,
+        warm_start_w=args.warm_start_w,
         sigma_f2_true=args.sigma_f2_true,
         sigma_eps2_true=args.sigma_eps2_true,
         print_every=args.print_every,
+        real_psi_if_full_batch=args.real_psi_if_full_batch,
+        penalty_normalization=args.penalty_normalization,
+        skip_eigh=args.skip_eigh,
     )
     sigma_f2 = torch.exp(rho).item()
     sigma_eps2 = sigma2.item()
@@ -319,7 +323,7 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "--dtype",
-        default="float64",
+        default="float32",
         choices=tuple(_DTYPE_ALIASES.keys()),
         help=(
             "Torch default dtype used for data generation and training "
@@ -388,18 +392,45 @@ def build_parser() -> argparse.ArgumentParser:
         "--lr-decay",
         type=float,
         default=1.0,
-        help="Exponential decay factor applied each minibatch (<=1).",
+        help="Exponential decay factor applied when the schedule triggers (<=1).",
     )
     minimax_parser.add_argument(
-        "--lr-decay-start-epoch",
+        "--lr-decay-every-epochs",
         type=int,
-        default=1,
-        help="Epoch index (1-based) when the lr_decay factor starts applying.",
+        default=0,
+        help="Every this many epochs multiply learning rates by lr_decay (0 disables).",
     )
     minimax_parser.add_argument("--sigma-f2-init", type=float, default=1.0)
     minimax_parser.add_argument("--sigma-eps2-init", type=float, default=1.0)
     minimax_parser.add_argument("--w-init-scale", type=float, default=0.1)
+    minimax_parser.add_argument(
+        "--warm-start-w",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Warm-start w via a ridge solve (pass --no-warm-start-w to disable).",
+    )
     minimax_parser.add_argument("--print-every", type=int, default=1)
+    minimax_parser.add_argument(
+        "--real-psi-if-full-batch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When --batch-size equals n, compute ψ exactly (respecting the "
+            "chosen penalty normalization) and skip the B ascent step."
+        ),
+    )
+    minimax_parser.add_argument(
+        "--penalty-normalization",
+        choices=("relative", "absolute"),
+        default="relative",
+        help="Use 'relative' for ||A-F||/||A|| or 'absolute' for ||A-F||.",
+    )
+    minimax_parser.add_argument(
+        "--skip-eigh",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Skip the torch.linalg.eigh projection on A to save time (unsafe).",
+    )
     minimax_parser.set_defaults(func=run_minimax)
 
     # SCGD parser
