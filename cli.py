@@ -6,6 +6,7 @@ import torch
 
 from bsgd import train_bsgd_neurips
 from minimax import minimax_train_orf
+from minimax_step_sizes import choose_step_sizes_torch
 from scgd import scgd_train_orf
 from utils import exact_nlml_gradients, generate_gp_data, orf_features
 
@@ -41,6 +42,14 @@ def _set_default_dtype(dtype_name: str) -> torch.dtype:
     return dtype
 
 
+def _get_data_seed(args) -> int:
+    return args.data_seed if args.data_seed is not None else args.seed
+
+
+def _get_opt_seed(args) -> int:
+    return args.opt_seed if args.opt_seed is not None else args.seed
+
+
 def _fork_rng_for_device(device: torch.device):
     if device.type == "cuda":
         idx = device.index if device.index is not None else torch.cuda.current_device()
@@ -53,7 +62,7 @@ def _build_phi_feature_map(args):
     if num_features <= 0:
         raise ValueError("--phi-num-features must be positive when kernel_mode='phi'.")
 
-    phi_seed = args.phi_seed if args.phi_seed is not None else args.seed
+    phi_seed = args.phi_seed if args.phi_seed is not None else _get_data_seed(args)
     phi_lengthscale = (
         args.phi_lengthscale if args.phi_lengthscale is not None else args.lengthscale
     )
@@ -73,6 +82,32 @@ def _build_phi_feature_map(args):
     return phi_fn
 
 
+def _build_orf_single_sample_phi(X, lengthscale: float, num_features: int, seed: int):
+    if num_features <= 0:
+        raise ValueError("--num-features must be positive.")
+
+    device = X.device
+    dtype = X.dtype
+    with _fork_rng_for_device(device):
+        torch.manual_seed(seed)
+        # Sample ORF parameters on a minimal batch to match the training distribution.
+        _, W, b = orf_features(
+            X[:1],
+            num_features=num_features,
+            lengthscale=lengthscale,
+            seed=seed,
+        )
+
+    scale = math.sqrt(2.0 / num_features)
+
+    def phi_fn(x: torch.Tensor) -> torch.Tensor:
+        x2d = x.reshape(1, -1).to(device=device, dtype=dtype)
+        feats = scale * torch.cos(x2d @ W.T + b)
+        return feats.reshape(-1)
+
+    return phi_fn
+
+
 def _prepare_data(args):
     device = _resolve_device(args.device)
     kernel_mode = args.kernel_mode
@@ -88,7 +123,7 @@ def _prepare_data(args):
         sigma_f2=args.sigma_f2_true,
         sigma_eps2=args.sigma_eps2_true,
         device=device,
-        seed=args.seed,
+        seed=_get_data_seed(args),
         cluster_strength=args.cluster_strength,
         heterogeneity=args.heterogeneity,
         kernel_mode=kernel_mode,
@@ -147,7 +182,7 @@ def run_minimax(args):
             X,
             lengthscale=args.lengthscale,
             num_features=args.num_features,
-            seed=args.seed,
+            seed=_get_opt_seed(args),
         )
     w, rho, sigma2, A, B = minimax_train_orf(
         Z_base,
@@ -174,6 +209,7 @@ def run_minimax(args):
         real_psi_if_full_batch=args.real_psi_if_full_batch,
         penalty_normalization=args.penalty_normalization,
         skip_eigh=args.skip_eigh,
+        log_sigma_grads=args.log_sigma_grads,
     )
     sigma_f2 = torch.exp(rho).item()
     sigma_eps2 = sigma2.item()
@@ -183,6 +219,71 @@ def run_minimax(args):
         )
     )
     return w, rho, sigma2, A, B
+
+
+def run_minimax_step_sizes(args):
+    device, X, y, _, Z_phi = _prepare_data(args)
+
+    if Z_phi is not None:
+        phi_seed = args.phi_seed if args.phi_seed is not None else _get_data_seed(args)
+        phi_lengthscale = (
+            args.phi_lengthscale if args.phi_lengthscale is not None else args.lengthscale
+        )
+        phi_fn = _build_orf_single_sample_phi(
+            X,
+            lengthscale=phi_lengthscale,
+            num_features=args.phi_num_features,
+            seed=phi_seed,
+        )
+        feature_dim = args.phi_num_features
+    else:
+        phi_fn = _build_orf_single_sample_phi(
+            X,
+            lengthscale=args.lengthscale,
+            num_features=args.num_features,
+            seed=_get_opt_seed(args),
+        )
+        feature_dim = args.num_features
+
+    sigma_f2_init = float(args.sigma_f2_init)
+    sigma_eps2_init = float(args.sigma_eps2_init)
+    if sigma_f2_init < 0 or sigma_eps2_init < 0:
+        raise ValueError("sigma-f2-init and sigma-eps2-init must be non-negative.")
+
+    sigma_f_init = math.sqrt(sigma_f2_init)
+    sigma_eps_init = math.sqrt(sigma_eps2_init)
+    if args.use_log_sigma and (sigma_f_init <= 0 or sigma_eps_init <= 0):
+        raise ValueError(
+            "sigma-f2-init and sigma-eps2-init must be positive when --use-log-sigma is enabled."
+        )
+
+    use_norm = args.penalty_normalization == "relative"
+    a, b = choose_step_sizes_torch(
+        phi=phi_fn,
+        X=X,
+        y=y,
+        sigma_f_init=sigma_f_init,
+        sigma_eps_init=sigma_eps_init,
+        eta=args.eta,
+        use_log_sigma=args.use_log_sigma,
+        use_normalization=use_norm,
+        ratio_norm=args.ratio_norm,
+        ratio_no_norm=args.ratio_no_norm,
+    )
+
+    norm_label = "relative" if use_norm else "absolute"
+    print(
+        "\n[MINIMAX-STEPS] Finished on device {} -> a ≈ {:.6g}, b ≈ {:.6g}".format(
+            device, a, b
+        )
+    )
+    print(
+        "  (penalty_normalization={}, eta={}, log_sigma={}, feature_dim={})".format(
+            norm_label, args.eta, args.use_log_sigma, feature_dim
+        )
+    )
+    print("  Use these via: --a {:.6g} --b {:.6g}".format(a, b))
+    return a, b
 
 
 def run_scgd(args):
@@ -195,7 +296,7 @@ def run_scgd(args):
             X,
             lengthscale=args.lengthscale,
             num_features=args.num_features,
-            seed=args.seed,
+            seed=_get_opt_seed(args),
         )
     w, rho, sigma2, F_tilde = scgd_train_orf(
         Z_base,
@@ -238,7 +339,9 @@ def run_nlml_grad(args):
     )
     sigma_f2 = math.exp(args.rho)
     print(
-        "\n[NLML-GRAD] Finished on device {} (seed {})".format(device, args.seed)
+        "\n[NLML-GRAD] Finished on device {} (seed {})".format(
+            device, _get_data_seed(args)
+        )
     )
     print(
         "Inputs:\tσ_f² = {:.4f}\tσ_ε² = {:.4f}".format(sigma_f2, args.sigma2)
@@ -255,7 +358,19 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
     parser.add_argument("--lengthscale", type=float, default=0.5, help="RBF lengthscale.")
     parser.add_argument("--sigma-f2-true", type=float, default=4.0, help="Ground-truth σ_f² used to sample data.")
     parser.add_argument("--sigma-eps2-true", type=float, default=1.0, help="Ground-truth σ_ε² used to sample data.")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed for data and ORF features.")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed used when seed overrides are not provided.")
+    parser.add_argument(
+        "--data-seed",
+        type=int,
+        default=None,
+        help="Random seed for synthetic data generation (defaults to --seed).",
+    )
+    parser.add_argument(
+        "--opt-seed",
+        type=int,
+        default=None,
+        help="Random seed for optimization primitives (e.g., ORF features). Defaults to --seed.",
+    )
     parser.add_argument(
         "--cluster-strength",
         type=float,
@@ -318,12 +433,12 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
         type=int,
         default=None,
         help=(
-            "Random seed for the φ feature map; defaults to --seed when not provided."
+            "Random seed for the φ feature map; defaults to --data-seed/--seed when omitted."
         ),
     )
     parser.add_argument(
         "--dtype",
-        default="float32",
+        default="float64",
         choices=tuple(_DTYPE_ALIASES.keys()),
         help=(
             "Torch default dtype used for data generation and training "
@@ -431,7 +546,56 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Skip the torch.linalg.eigh projection on A to save time (unsafe).",
     )
+    minimax_parser.add_argument(
+        "--log-sigma-grads",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Apply gradient updates in log σ_f²/σ_ε² space internally while "
+            "keeping reported values unchanged."
+        ),
+    )
     minimax_parser.set_defaults(func=run_minimax)
+
+    # MINIMAX step-size chooser parser
+    minimax_steps_parser = subparsers.add_parser(
+        "minimax-step-sizes",
+        parents=[common, orf_common],
+        help="Heuristically pick (a, b) for the MINIMAX optimizer.",
+    )
+    minimax_steps_parser.add_argument("--sigma-f2-init", type=float, default=1.0)
+    minimax_steps_parser.add_argument("--sigma-eps2-init", type=float, default=1.0)
+    minimax_steps_parser.add_argument(
+        "--eta",
+        type=float,
+        default=0.25,
+        help="Safety factor used when inverting the local curvature estimate.",
+    )
+    minimax_steps_parser.add_argument(
+        "--use-log-sigma",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Estimate curvature in (log σ_f, log σ_ε) coordinates.",
+    )
+    minimax_steps_parser.add_argument(
+        "--penalty-normalization",
+        choices=("relative", "absolute"),
+        default="relative",
+        help="Matches cli.py minimax --penalty-normalization flag.",
+    )
+    minimax_steps_parser.add_argument(
+        "--ratio-norm",
+        type=float,
+        default=10.0,
+        help="Dual/primal ratio used when penalty_normalization='relative'.",
+    )
+    minimax_steps_parser.add_argument(
+        "--ratio-no-norm",
+        type=float,
+        default=3.0,
+        help="Dual/primal ratio used when penalty_normalization='absolute'.",
+    )
+    minimax_steps_parser.set_defaults(func=run_minimax_step_sizes)
 
     # SCGD parser
     scgd_parser = subparsers.add_parser(
