@@ -50,6 +50,19 @@ def _get_opt_seed(args) -> int:
     return args.opt_seed if args.opt_seed is not None else args.seed
 
 
+def _get_algo_seed(args) -> int:
+    return args.algo_seed if args.algo_seed is not None else args.seed
+
+
+def _seed_algorithm_rng(args, *, device: str | None = None) -> int:
+    seed = _get_algo_seed(args)
+    torch.manual_seed(seed)
+    target_device = device if device is not None else _resolve_device(args.device)
+    if target_device == "cuda" and torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    return seed
+
+
 def _fork_rng_for_device(device: torch.device):
     if device.type == "cuda":
         idx = device.index if device.index is not None else torch.cuda.current_device()
@@ -139,18 +152,20 @@ def _prepare_data(args):
 
 
 def _prepare_orf_features(X, lengthscale: float, num_features: int, seed: int):
-    Z_base, _, _ = orf_features(
-        X,
-        num_features=num_features,
-        lengthscale=lengthscale,
-        seed=seed,
-    )
+    with _fork_rng_for_device(X.device):
+        Z_base, _, _ = orf_features(
+            X,
+            num_features=num_features,
+            lengthscale=lengthscale,
+            seed=seed,
+        )
     K_f_orf = Z_base @ Z_base.T
     return Z_base, K_f_orf
 
 
 def run_bsgd(args):
     device, _, y, K_f, _ = _prepare_data(args)
+    _seed_algorithm_rng(args, device=device)
     theta = train_bsgd_neurips(
         K_f,
         y,
@@ -174,6 +189,7 @@ def run_bsgd(args):
 
 def run_minimax(args):
     device, X, y, K_f, Z_phi = _prepare_data(args)
+    _seed_algorithm_rng(args, device=device)
     if Z_phi is not None:
         Z_base = Z_phi
         K_f_orf = K_f
@@ -223,6 +239,7 @@ def run_minimax(args):
 
 def run_minimax_step_sizes(args):
     device, X, y, _, Z_phi = _prepare_data(args)
+    _seed_algorithm_rng(args, device=device)
 
     if Z_phi is not None:
         phi_seed = args.phi_seed if args.phi_seed is not None else _get_data_seed(args)
@@ -288,6 +305,7 @@ def run_minimax_step_sizes(args):
 
 def run_scgd(args):
     device, X, y, K_f, Z_phi = _prepare_data(args)
+    _seed_algorithm_rng(args, device=device)
     if Z_phi is not None:
         Z_base = Z_phi
         K_f_orf = K_f
@@ -370,6 +388,12 @@ def _add_common_data_args(parser: argparse.ArgumentParser):
         type=int,
         default=None,
         help="Random seed for optimization primitives (e.g., ORF features). Defaults to --seed.",
+    )
+    parser.add_argument(
+        "--algo-seed",
+        type=int,
+        default=None,
+        help="Random seed for algorithmic randomness (e.g., minibatch ordering). Defaults to --seed.",
     )
     parser.add_argument(
         "--cluster-strength",

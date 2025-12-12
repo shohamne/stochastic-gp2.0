@@ -429,7 +429,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-11"),
+        default=Path("res-15"),
         help="Base directory containing stdout logs (default: res-9).",
     )
     parser.add_argument(

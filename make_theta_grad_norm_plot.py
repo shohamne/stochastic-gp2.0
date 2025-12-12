@@ -39,6 +39,55 @@ ALGO_TITLES = {
 }
 
 
+def _print_data_description(df: pd.DataFrame, grad_column: str, batch_size: int | None) -> None:
+    """Mimic the theta-error script's helpful metadata dump."""
+    batch_label = "any" if batch_size is None else str(batch_size)
+    total_rows = len(df)
+    has_seed = "seed" in df.columns
+    n_seeds = df["seed"].nunique() if has_seed else "n/a"
+    iter_min = df["iter"].min() if "iter" in df.columns else None
+    iter_max = df["iter"].max() if "iter" in df.columns else None
+
+    print("[Theta Grad Norm] Data description:")
+    print(f"  Batch-size filter : {batch_label}")
+    print(f"  Rows / unique seeds: {total_rows:,} / {n_seeds}")
+    if iter_min is not None and iter_max is not None:
+        print(f"  Iteration range   : {int(iter_min)} – {int(iter_max)}")
+
+    algo_counts = df["algo"].value_counts(sort=False) if "algo" in df.columns else {}
+    for algo in ALGO_ORDER:
+        if algo in algo_counts:
+            seed_count = (
+                df[df["algo"] == algo]["seed"].nunique() if has_seed else "n/a"
+            )
+            print(
+                f"    {ALGO_TITLES[algo]:<20} · rows={int(algo_counts[algo]):,}, "
+                f"seeds={seed_count}"
+            )
+
+    if {"sigma_f2_init", "sigma_eps2_init"} <= set(df.columns) and has_seed:
+        init_counts = (
+            df.groupby(["sigma_f2_init", "sigma_eps2_init"])
+            .agg(rows=("iter", "size"), seeds=("seed", "nunique"))
+            .reset_index()
+            .sort_values(["sigma_f2_init", "sigma_eps2_init"])
+        )
+        for row in init_counts.itertuples(index=False):
+            print(
+                "    Init σ_f²={:.2g}, σ_ε²={:.2g}: rows={}, seeds={}".format(
+                    row.sigma_f2_init, row.sigma_eps2_init, int(row.rows), int(row.seeds)
+                )
+            )
+
+    if grad_column in df.columns:
+        finite_vals = df[grad_column].replace([np.inf, -np.inf], np.nan).dropna()
+        if not finite_vals.empty:
+            print(
+                f"  {grad_column} stats   : mean={finite_vals.mean():.3g}, "
+                f"std={finite_vals.std(ddof=1):.3g}"
+            )
+
+
 def _nan_moving_average(y: np.ndarray, window: int) -> np.ndarray:
     if window <= 1:
         return y.copy()
@@ -104,6 +153,7 @@ def make_theta_grad_norm_plot_from_df(
             raise RuntimeError(
                 f"No rows left after filtering to batch_size == {batch_size}."
             )
+    _print_data_description(df, grad_column, batch_size)
 
     truncated_init_fixups = [
         {
@@ -297,6 +347,8 @@ def _load_dataframe(source: Path) -> pd.DataFrame:
         if suffix in {".parquet", ".pq"}:
             print(f"[Theta Grad Norm] Loading cached Parquet dataframe from {source} ...")
             return pd.read_parquet(source)
+    if source.is_dir():
+        print(f"[Theta Grad Norm] Collecting stdout logs under {source} ...")
     return collect_stdout_logs(source)
 
 
@@ -309,10 +361,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-11/results/1"),
+        default=Path("res-13"),
         help=(
             "Directory containing stdout logs or a cached CSV / Parquet dataframe "
-            "(default: res-11/results/1)."
+            "(default: res-13)."
         ),
     )
     parser.add_argument(

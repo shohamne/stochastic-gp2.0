@@ -274,19 +274,34 @@ def make_figure1_from_df(
     # Global legend: parameter styles + ground truth
     from matplotlib.lines import Line2D
 
-    example_color = "C0"
-    legend_handles = [
-        Line2D([0], [0], color=example_color, linestyle="-", linewidth=1.5),
-        Line2D([0], [0], color=example_color, linestyle="--", linewidth=1.5),
-        Line2D([0], [0], color="k", linestyle="-", linewidth=1.0),
-        Line2D([0], [0], color="k", linestyle=":", linewidth=1.0),
-    ]
-    legend_labels = [
-        r"$\sigma_f^2$ (per repetition)",
-        r"$\sigma_\varepsilon^2$ (per repetition)",
-        r"True $\sigma_f^2$",
-        r"True $\sigma_\varepsilon^2$",
-    ]
+    example_color = seed_to_color[all_seeds[0]] if all_seeds else "C0"
+    legend_handles = []
+    legend_labels = []
+
+    # Explicitly show which color corresponds to which seed/run.
+    if all_seeds:
+        for seed in all_seeds:
+            legend_handles.append(
+                Line2D([0], [0], color=seed_to_color[seed], linestyle="-", linewidth=1.5)
+            )
+            legend_labels.append(f"Seed {seed}")
+
+    legend_handles.extend(
+        [
+            Line2D([0], [0], color=example_color, linestyle="-", linewidth=1.5),
+            Line2D([0], [0], color=example_color, linestyle="--", linewidth=1.5),
+            Line2D([0], [0], color="k", linestyle="-", linewidth=1.0),
+            Line2D([0], [0], color="k", linestyle=":", linewidth=1.0),
+        ]
+    )
+    legend_labels.extend(
+        [
+            r"$\sigma_f^2$ (per repetition)",
+            r"$\sigma_\varepsilon^2$ (per repetition)",
+            r"True $\sigma_f^2$",
+            r"True $\sigma_\varepsilon^2$",
+        ]
+    )
 
     fig.legend(
         legend_handles,
@@ -312,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-12"),
+        default=Path("res-17"),
         help="Base directory containing stdout logs (default: res-11).",
     )
     parser.add_argument(
