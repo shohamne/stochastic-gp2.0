@@ -295,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--root",
         type=Path,
         default=Path("res-17"),
-        help="Base directory containing stdout logs (default: res-17).",
+        help="Base directory containing stdout logs (default: res-19).",
     )
     parser.add_argument(
         "--output",
@@ -329,7 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-epoch",
         type=int,
-        default=50000,
+        default=5000,
         help="Maximum epoch included in the plot. Use -1 to keep all epochs.",
     )
     return parser
