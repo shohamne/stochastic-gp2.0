@@ -45,7 +45,7 @@ def _mu_label(df_run) -> str:
 
 def make_res18_seed_subplots(
     df,
-    output: str | Path = "res18_seed_subplot.png",
+    output: str | Path = "res18_seed_subplot.pdf",
     seeds: tuple[int, ...] = DEFAULT_SEEDS,
     mus: tuple[float, ...] | None = None,
     smooth_window: int = 1,
@@ -53,16 +53,11 @@ def make_res18_seed_subplots(
     max_iter: int | None = None,
     max_epoch: int | None = None,
     ref_root: str | Path | None = Path("res-17"),
-    extra_root: str | Path | None = Path("res-16"),
-    extra_seeds: tuple[int, ...] = (5,),
-    extra_label: str = "res-16",
 ) -> None:
     """
     Create a 3xN panel plot (N = number of columns):
 
-    - Base columns come from `df` (e.g., res-18) using `seeds`.
-    - An optional extra column can be pulled from `extra_root` (e.g., res-16)
-      using `extra_seeds`, plotted with the same styling.
+    - Base columns come from `df` using `seeds`.
     - Row 1: σ_f² (solid) and σ_ε² (dashed) per run of the seed, with reference
       lines pulled from `ref_root`.
     - Row 2: gradient norm per run (if available in dataframe).
@@ -71,7 +66,7 @@ def make_res18_seed_subplots(
     Legend entries use μ values (scientific notation). Optionally filter to a
     specific set of μ values. A black reference line is added for each θ
     parameter using the last iteration value from the same seed under
-    `ref_root` (default: res-17).
+    `ref_root`.
     """
 
     if df.empty:
@@ -161,37 +156,19 @@ def make_res18_seed_subplots(
 
         return df_cur
 
-    df = _filter_dataset(df, seeds, "res-18")
+    df = _filter_dataset(df, seeds, "main")
 
     datasets: list[dict[str, object]] = [
-        {"label": "res-18", "df": df, "seeds": tuple(seeds)}
+        {"label": "", "df": df, "seeds": tuple(seeds)}
     ]
-
-    if extra_root is not None:
-        df_extra_raw = collect_stdout_logs(Path(extra_root))
-        if df_extra_raw.empty:
-            print(f"[{extra_label}] No stdout records found under {extra_root}; skipping extra column.")
-        else:
-            try:
-                df_extra = _filter_dataset(df_extra_raw, extra_seeds, extra_label)
-            except RuntimeError as exc:
-                print(f"[{extra_label}] Skipping extra column: {exc}")
-            else:
-                datasets.append(
-                    {
-                        "label": extra_label,
-                        "df": df_extra,
-                        "seeds": tuple(extra_seeds),
-                    }
-                )
 
     if not datasets:
         raise RuntimeError("No datasets available to plot after filtering.")
 
     smooth_window = int(max(smooth_window, 1))
 
-    # Collect unique μ labels so colors stay consistent across subplots.
-    mu_labels: list[str] = []
+    # Collect unique μ values and labels so colors stay consistent across subplots.
+    mu_values_set: set[float] = set()
     for dataset in datasets:
         df_dataset = dataset["df"]
         seeds_dataset = dataset["seeds"]
@@ -204,9 +181,13 @@ def make_res18_seed_subplots(
             else:
                 grouped = [(f"seed-{seed}", df_seed)]
             for _, df_run in grouped:
-                mu_text = _mu_label(df_run)
-                if mu_text not in mu_labels:
-                    mu_labels.append(mu_text)
+                if "mu" in df_run.columns:
+                    mu_series = df_run["mu"].dropna().to_numpy(dtype=float)
+                    if mu_series.size > 0:
+                        mu_values_set.add(mu_series[0])
+    # Sort μ values numerically and generate labels
+    sorted_mu_values = sorted(mu_values_set)
+    mu_labels: list[str] = [rf"$\mu$={_format_mu_value(mu)}" for mu in sorted_mu_values]
 
     num_colors = max(len(mu_labels), 1)
     cmap = plt.get_cmap("tab10", num_colors)
@@ -215,7 +196,6 @@ def make_res18_seed_subplots(
     # Optional reference values drawn as black lines (last iteration per seed).
     ref_values: dict[int, dict[str, float | None]] = {}
     all_seeds = {seed for dataset in datasets for seed in dataset["seeds"]}  # type: ignore[arg-type]
-    ref_label = Path(ref_root).name if ref_root is not None else "reference"
     if ref_root is not None:
         df_ref = collect_stdout_logs(Path(ref_root))
         if not df_ref.empty:
@@ -388,7 +368,7 @@ def make_res18_seed_subplots(
                 y_limits["nlml"][0] = min(y_limits["nlml"][0], nlml_vals.min())
                 y_limits["nlml"][1] = max(y_limits["nlml"][1], nlml_vals.max())
 
-        # Reference horizontal lines from res-17 (last iteration per seed)
+        # Reference horizontal lines (last iteration per seed)
         ref_vals = ref_values.get(seed)
         if ref_vals:
             if ref_vals.get("sigma_f2") is not None:
@@ -401,7 +381,7 @@ def make_res18_seed_subplots(
                     linestyle="-",
                     linewidth=1.4,
                     alpha=0.85,
-                    label=rf"$\sigma_f^2$ optimal ({ref_label})",
+                    label=r"$\sigma_f^2$ optimal",
                 )
             if ref_vals.get("sigma_eps2") is not None:
                 y_ref = ref_vals["sigma_eps2"]
@@ -413,7 +393,7 @@ def make_res18_seed_subplots(
                     linestyle=":",
                     linewidth=1.4,
                     alpha=0.85,
-                    label=rf"$\sigma_\varepsilon^2$ optimal ({ref_label})",
+                    label=r"$\sigma_\varepsilon^2$ optimal",
                 )
             if has_grad and ref_vals.get("grad_norm") is not None:
                 y_ref = ref_vals["grad_norm"]
@@ -425,7 +405,7 @@ def make_res18_seed_subplots(
                     linestyle="--",
                     linewidth=1.2,
                     alpha=0.8,
-                    label=f"grad optimal ({ref_label})",
+                    label="grad optimal",
                 )
             if has_nlml and ref_vals.get("real_nlml") is not None:
                 y_ref = ref_vals["real_nlml"]
@@ -437,16 +417,16 @@ def make_res18_seed_subplots(
                     linestyle="--",
                     linewidth=1.2,
                     alpha=0.8,
-                    label=f"NLML optimal ({ref_label})",
+                    label="NLML optimal",
                 )
 
-        ax_sigma.set_title(f"{panel['label']} seed {seed}")  # type: ignore[index]
+        ax_sigma.set_title(f"seed {seed}")  # type: ignore[index]
         if ax_idx == 0:
             ax_sigma.set_ylabel(r"$\theta^{(t)}$")
             if has_grad:
                 ax_grad.set_ylabel(r"$\|\nabla \ell(\theta^{(t)})\|_2$")
             if has_nlml:
-                ax_nlml.set_ylabel("Real NLML")
+                ax_nlml.set_ylabel("Negative Log Marginal Likelihood")
         ax_nlml.set_xlabel("Iteration $t$")
         ax_sigma.grid(True, linestyle=":", linewidth=0.6, alpha=0.6)
         if has_grad:
@@ -469,6 +449,9 @@ def make_res18_seed_subplots(
     _apply_shared_ylim(axes[0, :], "sigma")
     if has_grad:
         _apply_shared_ylim(axes[1, :], "grad")
+        for ax in axes[1, :]:
+            if ax.get_visible():
+                ax.set_yscale("log")
     else:
         for ax in axes[1, :]:
             ax.set_visible(False)
@@ -498,10 +481,10 @@ def make_res18_seed_subplots(
     style_labels = [
         r"$\sigma_f^2$",
         r"$\sigma_\varepsilon^2$",
-        rf"$\sigma_f^2$ optimal ({ref_label})",
-        rf"$\sigma_\varepsilon^2$ optimal ({ref_label})",
-        f"grad optimal ({ref_label})",
-        f"NLML optimal ({ref_label})",
+        r"$\sigma_f^2$ optimal",
+        r"$\sigma_\varepsilon^2$ optimal",
+        "grad optimal",
+        "NLML optimal",
     ]
 
     if mu_handles:
@@ -532,20 +515,20 @@ def make_res18_seed_subplots(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Plot res-18 minimax trajectories for seeds 3 and 1, "
-            "optionally adding a comparison column from another root (default: res-16)."
+            "Plot minimax trajectories for specified seeds, "
+            "optionally adding a comparison column from another root."
         )
     )
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("res-18"),
-        help="Base directory containing stdout logs (default: res-18).",
+        default=Path("res-25"),
+        help="Base directory containing stdout logs (default: res-25).",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("res18_seed_subplot.png"),
+        default=Path("res25_seed_subplot.pdf"),
         help="Output image filename.",
     )
     parser.add_argument(
@@ -557,7 +540,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=1024,
+        default=128,
         help=(
             "Minibatch size that runs must match to be included. "
             "Set to another value (or -1) to select different runs; "
@@ -573,46 +556,34 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-epoch",
         type=int,
-        default=200000,
+        default=40000,
         help="Maximum epoch included in the plot. Use -1 to keep all epochs.",
     )
     parser.add_argument(
         "--mus",
         type=float,
         nargs="+",
-        default=[0, 1,10,100,1000],
+        default=[0, 1, 10, 100, 1000],
         help=(
             "Optional list of μ values to include (scientific/decimal allowed). "
             "If omitted, include all μ."
         ),
     )
     parser.add_argument(
-        "--ref-root",
-        type=Path,
-        default=Path("res-17"),
-        help="Reference root used to draw black lines from the last iteration (default: res-17).",
-    )
-    parser.add_argument(
-        "--extra-root",
-        type=Path,
-        default=Path("res-16"),
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=[1, 3, 5],
         help=(
-            "Optional extra dataset root to add as an additional column "
-            "(default: res-16). Use 'none' to disable."
+            "Optional list of seeds to include. "
+            "Default: [1, 3, 5]."
         ),
     )
     parser.add_argument(
-        "--extra-seeds",
-        type=int,
-        nargs="+",
-        default=[5],
-        help="Seeds to include from the extra dataset (default: 5).",
-    )
-    parser.add_argument(
-        "--extra-label",
-        type=str,
-        default="res-16",
-        help="Label displayed above the extra dataset column.",
+        "--ref-root",
+        type=Path,
+        default=Path("res-20"),
+        help="Reference root used to draw black lines from the last iteration (default: res-17).",
     )
     return parser
 
@@ -626,23 +597,17 @@ def main() -> None:
         print(f"No stdout records found under {args.root}")
         return
 
-    extra_root: Path | None = args.extra_root
-    if args.extra_root is not None and str(args.extra_root).lower() == "none":
-        extra_root = None
-
+    seeds = tuple(args.seeds) if args.seeds is not None else DEFAULT_SEEDS
     make_res18_seed_subplots(
         df,
         output=args.output,
-        seeds=DEFAULT_SEEDS,
+        seeds=seeds,
         mus=None if args.mus is None else tuple(args.mus),
         smooth_window=args.smooth_window,
         batch_size=None if args.batch_size == -1 else args.batch_size,
         max_iter=None if args.max_iter == -1 else args.max_iter,
         max_epoch=None if args.max_epoch == -1 else args.max_epoch,
         ref_root=args.ref_root,
-        extra_root=extra_root,
-        extra_seeds=tuple(args.extra_seeds),
-        extra_label=args.extra_label,
     )
 
 
