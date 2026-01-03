@@ -40,6 +40,7 @@ def make_scgd_figure_from_df(
     batch_size: int | None = 128,
     max_iter: int | None = None,
     max_epoch: int | None = None,
+    show_average: bool = False,
 ) -> None:
     """
     Create a 1x3 panel plot for SCGD showing σ_f² and σ_ε² trajectories across seeds.
@@ -157,6 +158,15 @@ def make_scgd_figure_from_df(
             continue
 
         seeds = sorted(df_cfg["seed"].unique())
+        
+        # Collect trajectories for averaging (if enabled)
+        all_sigma_f2 = []
+        all_sigma_eps2 = []
+        common_x = None
+        
+        # Use lower alpha when showing average so it stands out
+        line_alpha = 0.5 if show_average else 0.8
+        
         for seed in seeds:
             df_seed = (
                 df_cfg[df_cfg["seed"] == seed]
@@ -182,7 +192,7 @@ def make_scgd_figure_from_df(
                 sigma_f2,
                 color=color,
                 linewidth=1.0,
-                alpha=0.8,
+                alpha=line_alpha,
                 linestyle="-",
             )
             ax.plot(
@@ -190,11 +200,43 @@ def make_scgd_figure_from_df(
                 sigma_eps2,
                 color=color,
                 linewidth=1.0,
-                alpha=0.8,
+                alpha=line_alpha,
                 linestyle="--",
             )
             y_min = min(y_min, sigma_f2.min(), sigma_eps2.min())
             y_max = max(y_max, sigma_f2.max(), sigma_eps2.max())
+            
+            # Store for averaging
+            if show_average:
+                all_sigma_f2.append((x, sigma_f2))
+                all_sigma_eps2.append((x, sigma_eps2))
+                if common_x is None or len(x) < len(common_x):
+                    common_x = x
+        
+        # Plot average across seeds as thick black lines
+        if show_average and common_x is not None and len(all_sigma_f2) > 0:
+            n_pts = len(common_x)
+            avg_sigma_f2 = np.mean([s[:n_pts] for _, s in all_sigma_f2], axis=0)
+            avg_sigma_eps2 = np.mean([s[:n_pts] for _, s in all_sigma_eps2], axis=0)
+            
+            ax.plot(
+                common_x,
+                avg_sigma_f2,
+                color="black",
+                linewidth=2.5,
+                alpha=1.0,
+                linestyle="-",
+                label=r"Avg $\sigma_f^2$",
+            )
+            ax.plot(
+                common_x,
+                avg_sigma_eps2,
+                color="black",
+                linewidth=2.5,
+                alpha=1.0,
+                linestyle="--",
+                label=r"Avg $\sigma_\varepsilon^2$",
+            )
 
         def _unique_scalar(df_section, column: str) -> float | None:
             if column not in df_section.columns:
@@ -261,6 +303,15 @@ def make_scgd_figure_from_df(
         r"$\sigma_f^2$",
         r"$\sigma_\varepsilon^2$",
     ]
+    if show_average:
+        style_handles.extend([
+            Line2D([0], [0], color="black", linestyle="-", linewidth=2.5),
+            Line2D([0], [0], color="black", linestyle="--", linewidth=2.5),
+        ])
+        style_labels.extend([
+            r"Avg $\sigma_f^2$",
+            r"Avg $\sigma_\varepsilon^2$",
+        ])
 
     if seed_handles:
         seed_legend = fig.legend(
@@ -276,7 +327,7 @@ def make_scgd_figure_from_df(
         style_handles,
         style_labels,
         loc="lower center",
-        bbox_to_anchor=(0.7, 0.13),
+        bbox_to_anchor=(0.7, 0.10),
         ncol=2,
     )
     fig.add_artist(style_legend)
@@ -329,8 +380,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-epoch",
         type=int,
-        default=5000,
+        default=2000000,
         help="Maximum epoch included in the plot. Use -1 to keep all epochs.",
+    )
+    parser.add_argument(
+        "--show-average",
+        action="store_true",
+        default=False,
+        help="Show average across seeds as thick black lines.",
     )
     return parser
 
@@ -351,6 +408,7 @@ def main() -> None:
         batch_size=None if args.batch_size == -1 else args.batch_size,
         max_iter=None if args.max_iter == -1 else args.max_iter,
         max_epoch=None if args.max_epoch == -1 else args.max_epoch,
+        show_average=args.show_average,
     )
 
 
