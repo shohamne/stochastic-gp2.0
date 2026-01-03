@@ -380,7 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-epoch",
         type=int,
-        default=2000000,
+        default=50000,
         help="Maximum epoch included in the plot. Use -1 to keep all epochs.",
     )
     parser.add_argument(
