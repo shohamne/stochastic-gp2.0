@@ -395,18 +395,6 @@ def make_res18_seed_subplots(
                     alpha=0.85,
                     label=r"$\sigma_\varepsilon^2$ optimal",
                 )
-            if has_grad and ref_vals.get("grad_norm") is not None:
-                y_ref = ref_vals["grad_norm"]
-                y_limits["grad"][0] = min(y_limits["grad"][0], y_ref)
-                y_limits["grad"][1] = max(y_limits["grad"][1], y_ref)
-                ax_grad.axhline(
-                    y_ref,
-                    color="k",
-                    linestyle="--",
-                    linewidth=1.2,
-                    alpha=0.8,
-                    label="grad optimal",
-                )
             if has_nlml and ref_vals.get("real_nlml") is not None:
                 y_ref = ref_vals["real_nlml"]
                 y_limits["nlml"][0] = min(y_limits["nlml"][0], y_ref)
