@@ -22,13 +22,18 @@ def _smooth_series(y: np.ndarray, window: int) -> np.ndarray:
 
 
 def _format_mu_value(mu: float) -> str:
-    """Format μ using scientific notation (mantissa·10^exp) for consistency."""
+    """Format μ using LaTeX scientific notation (10^{exp}) for consistency."""
     if np.isclose(mu, 0.0):
-        return "0.0e0"
+        return r"$0$"
     mantissa, exponent = f"{mu:.1e}".split("e")
-    mantissa = mantissa.rstrip("0").rstrip(".")
+    mantissa_float = float(mantissa)
     exponent = int(exponent)  # strip leading zeros/plus sign
-    return f"{mantissa}e{exponent}"
+    # If mantissa is 1.0, just show 10^{exp}
+    if np.isclose(mantissa_float, 1.0):
+        return rf"$10^{{{exponent}}}$"
+    # Otherwise show mantissa × 10^{exp}
+    mantissa_str = mantissa.rstrip("0").rstrip(".")
+    return rf"${mantissa_str} \times 10^{{{exponent}}}$"
 
 
 def _mu_label(df_run) -> str:
@@ -190,7 +195,7 @@ def make_res18_seed_subplots(
     mu_labels: list[str] = [rf"$\mu$={_format_mu_value(mu)}" for mu in sorted_mu_values]
 
     num_colors = max(len(mu_labels), 1)
-    cmap = plt.get_cmap("tab10", num_colors)
+    cmap = plt.get_cmap("tab10")
     mu_to_color = {mu: cmap(i % cmap.N) for i, mu in enumerate(mu_labels)}
 
     # Optional reference values drawn as black lines (last iteration per seed).
@@ -459,19 +464,13 @@ def make_res18_seed_subplots(
     mu_legend_labels = mu_labels
 
     style_handles = [
-        Line2D([0], [0], color=example_color, linestyle="-", linewidth=2.0),
-        Line2D([0], [0], color=example_color, linestyle="--", linewidth=2.0),
         Line2D([0], [0], color="k", linestyle="-", linewidth=1.4),
         Line2D([0], [0], color="k", linestyle=":", linewidth=1.4),
         Line2D([0], [0], color="k", linestyle="--", linewidth=1.2),
-        Line2D([0], [0], color="k", linestyle="--", linewidth=1.2),
     ]
     style_labels = [
-        r"$\sigma_f^2$",
-        r"$\sigma_\varepsilon^2$",
         r"$\sigma_f^2$ optimal",
         r"$\sigma_\varepsilon^2$ optimal",
-        "grad optimal",
         "NLML optimal",
     ]
 
@@ -490,7 +489,7 @@ def make_res18_seed_subplots(
         style_labels,
         loc="lower center",
         bbox_to_anchor=(0.7, 0.13),
-        ncol=2,
+        ncol=3,
     )
     fig.add_artist(style_legend)
 
