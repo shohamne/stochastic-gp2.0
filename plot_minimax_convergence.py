@@ -415,7 +415,7 @@ def make_res18_seed_subplots(
 
         ax_sigma.set_title(f"seed {seed}")  # type: ignore[index]
         if ax_idx == 0:
-            ax_sigma.set_ylabel(r"$\theta^{(t)}$")
+            ax_sigma.set_ylabel(r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(t)}$")
             if has_grad:
                 ax_grad.set_ylabel(r"$\|\nabla \ell(\theta^{(t)})\|_2$")
             if has_nlml:

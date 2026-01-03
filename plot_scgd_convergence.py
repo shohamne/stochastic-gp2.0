@@ -13,17 +13,17 @@ from collect_results import collect_stdout_logs
 
 INIT_CONFIGS = [
     {
-        "name": r"$\theta^{(0)} = (5.0, 3.0)$",
+        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (5.0, 3.0)$",
         "sigma_f2_init": 5.0,
         "sigma_eps2_init": 3.0,
     },
     {
-        "name": r"$\theta^{(0)} = (2.5, 3.5)$",
+        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (2.5, 3.5)$",
         "sigma_f2_init": 2.5,
         "sigma_eps2_init": 3.5,
     },
     {
-        "name": r"$\theta^{(0)} = (2.5, 0.7)$",
+        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (2.5, 0.7)$",
         "sigma_f2_init": 2.5,
         "sigma_eps2_init": 0.7,
     },
@@ -272,7 +272,7 @@ def make_scgd_figure_from_df(
         ax.set_title(cfg["name"])
         ax.set_xlabel("Iteration $t$")
         if col_idx == 0:
-            ax.set_ylabel(r"$\theta^{(t)}$", fontsize=10)
+            ax.set_ylabel(r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(t)}$", fontsize=10)
         ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)
 
     if np.isfinite(y_min) and np.isfinite(y_max):
@@ -296,8 +296,8 @@ def make_scgd_figure_from_df(
             seed_labels.append(f"Seed {seed}")
 
     style_handles = [
-        Line2D([0], [0], color=example_color, linestyle="-", linewidth=2.0),
-        Line2D([0], [0], color=example_color, linestyle="--", linewidth=2.0),
+        Line2D([0], [0], color="black", linestyle="-", linewidth=2.0),
+        Line2D([0], [0], color="black", linestyle="--", linewidth=2.0),
     ]
     style_labels = [
         r"$\sigma_f^2$",
@@ -380,7 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-epoch",
         type=int,
-        default=50000,
+        default=40000,
         help="Maximum epoch included in the plot. Use -1 to keep all epochs.",
     )
     parser.add_argument(
