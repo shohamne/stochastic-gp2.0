@@ -1,0 +1,8 @@
+[GPU 0][JOB 7] 'python cli.py minimax --n 1024 --lengthscale 0.5 --sigma-f2-true 4.0 --sigma-eps2-true 1.0 --n-epochs 100 --print-every 1 --device auto --kernel-mode finite --a 1.e-4 --b 40e-3 --w-init-scale 0.001 --num-features 128 --mu-increase-factor 1.0 --mu-increase-epochs 0 --mu 1.e6 --lr-decay 1.0 --lr-decay-every-epochs 0 --seed 1 --batch-size 128 --sigma-f2-init 6.0  --sigma-eps2-init 2.0 --penalty-normalization relative     --real-psi-if-full-batch '
+[CLI] Using torch default dtype torch.float64.
+[MINIMAX] --real-psi-if-full-batch ignored because batch_size != n (falling back to stochastic ψ).
+
+=== MINIMAX + ORF (TMLR) ===  ψ = (g(θ) + log|A| + μ‖A-F‖/‖A‖)/n
+iter	epoch	σ_f²	σ_ε²	real_nlml	real_nlml_true	real_nlml_abs_err	orf_nlml	orf_nlml_true	μ	|A-F|/|A|	|A-F|		|A|		|F|		cosAF	|B|	cosBΔ	pen/pen*	lr_scale	ψ_real	g(θ)/n		‖Φw-y‖²/(nσ_ε²)	‖w‖²/n	((n-d)logσ_ε²)/n	(log|A|)/n	μ‖A-F‖/‖A‖/n	||grad_psi_real||	||grad||	duration_s	wall_time_s
+   1	 1	 6.0648	 1.9808	   1.5913	        1.5046	          0.0867	   1.5913	        1.5046	1000000.0000	1.068e-02	1.631e+01	1.526e+03	1.543e+03	 1.0000	 1.0000	-0.0070	-0.0070	 1.00000	  11.7791	   1.1152	   0.5010	   0.0161	   0.5981	   0.2301	  10.4338	9.817e+02	1.160e-01	   1.185	     1.244
+   2	 1	 3.9554	 1.9543	   1.5841	        1.5046	          0.0795	   1.5841	        1.5046	1000000.0000	3.390e-01	5.175e+02	1.526e+03	1.009e+03	 1.0000	 1.0000	 0.8288	 0.8288	 1.00000	 332.4813	   1.1556	   0.5532	   0.0161	   0.5863	   0.2301	 331.0956	6.405e+02	1.159e-01	   0.402	     1.646

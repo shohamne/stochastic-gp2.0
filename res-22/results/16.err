@@ -1,0 +1,17 @@
+/opt/pytorch/lib/python3.12/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Traceback (most recent call last):
+  File "/home/ubuntu/stochastic-gp2.0/cli.py", line 687, in <module>
+    main()
+  File "/home/ubuntu/stochastic-gp2.0/cli.py", line 683, in main
+    args.func(args)
+  File "/home/ubuntu/stochastic-gp2.0/cli.py", line 203, in run_minimax
+    w, rho, sigma2, A, B = minimax_train_orf(
+                           ^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/stochastic-gp2.0/minimax.py", line 287, in minimax_train_orf
+    real_nlml = exact_nlml_from_precomputed(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/stochastic-gp2.0/utils.py", line 183, in exact_nlml_from_precomputed
+    L = torch.linalg.cholesky(K)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+torch._C._LinAlgError: linalg.cholesky: The factorization could not be completed because the input is not positive-definite (the leading minor of order 23 is not positive-definite).
