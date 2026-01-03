@@ -35,7 +35,7 @@ ALGO_TITLE = "SCGD + ORF"
 
 def make_scgd_figure_from_df(
     df,
-    output: str | Path = "neurips_figure1_scgd.pdf",
+    output: str | Path = "scgd_convergence.pdf",
     smooth_window: int = 1,
     batch_size: int | None = 128,
     max_iter: int | None = None,
@@ -351,7 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("neurips_figure1_scgd.pdf"),
+        default=Path("scgd_convergence.pdf"),
         help="Output image filename.",
     )
     parser.add_argument(

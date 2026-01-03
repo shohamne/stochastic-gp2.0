@@ -45,7 +45,7 @@ def _mu_label(df_run) -> str:
 
 def make_res18_seed_subplots(
     df,
-    output: str | Path = "res18_seed_subplot.pdf",
+    output: str | Path = "minimax_convergence.pdf",
     seeds: tuple[int, ...] = DEFAULT_SEEDS,
     mus: tuple[float, ...] | None = None,
     smooth_window: int = 1,
@@ -528,7 +528,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("res25_seed_subplot.pdf"),
+        default=Path("minimax_convergence.pdf"),
         help="Output image filename.",
     )
     parser.add_argument(
