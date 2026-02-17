@@ -13,17 +13,17 @@ from collect_results import collect_stdout_logs
 
 INIT_CONFIGS = [
     {
-        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (5.0, 3.0)$",
+        "name": r"$(\sigma_{f,0}^2, \sigma_{\varepsilon,0}^2) = (5.0, 3.0)$",
         "sigma_f2_init": 5.0,
         "sigma_eps2_init": 3.0,
     },
     {
-        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (2.5, 3.5)$",
+        "name": r"$(\sigma_{f,0}^2, \sigma_{\varepsilon,0}^2) = (2.5, 3.5)$",
         "sigma_f2_init": 2.5,
         "sigma_eps2_init": 3.5,
     },
     {
-        "name": r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(0)} = (2.5, 0.7)$",
+        "name": r"$(\sigma_{f,0}^2, \sigma_{\varepsilon,0}^2) = (2.5, 0.7)$",
         "sigma_f2_init": 2.5,
         "sigma_eps2_init": 0.7,
     },
@@ -272,7 +272,7 @@ def make_scgd_figure_from_df(
         ax.set_title(cfg["name"])
         ax.set_xlabel("Iteration $t$")
         if col_idx == 0:
-            ax.set_ylabel(r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(t)}$", fontsize=10)
+            ax.set_ylabel(r"$(\sigma_{f,t}^2, \sigma_{\varepsilon,t}^2)$", fontsize=10)
         ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)
 
     if np.isfinite(y_min) and np.isfinite(y_max):

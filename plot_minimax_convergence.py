@@ -386,7 +386,7 @@ def make_res18_seed_subplots(
                     linestyle="-",
                     linewidth=1.4,
                     alpha=0.85,
-                    label=r"$\sigma_f^2$ optimal",
+                    label=r"$(\sigma_f^{2})^{\star}$",
                 )
             if ref_vals.get("sigma_eps2") is not None:
                 y_ref = ref_vals["sigma_eps2"]
@@ -398,7 +398,7 @@ def make_res18_seed_subplots(
                     linestyle=":",
                     linewidth=1.4,
                     alpha=0.85,
-                    label=r"$\sigma_\varepsilon^2$ optimal",
+                    label=r"$(\sigma_\varepsilon^{2})^{\star}$",
                 )
             if has_nlml and ref_vals.get("real_nlml") is not None:
                 y_ref = ref_vals["real_nlml"]
@@ -410,16 +410,16 @@ def make_res18_seed_subplots(
                     linestyle="--",
                     linewidth=1.2,
                     alpha=0.8,
-                    label="NLML optimal",
+                    label=r"$-\log p(\mathbf{y}|X, (\sigma_f^{2})^{\star}, (\sigma_\varepsilon^{2})^{\star})$",
                 )
 
         ax_sigma.set_title(f"seed {seed}")  # type: ignore[index]
         if ax_idx == 0:
-            ax_sigma.set_ylabel(r"$(\sigma_f^2, \sigma_\varepsilon^2)^{(t)}$")
+            ax_sigma.set_ylabel(r"$(\sigma_{f,t}^2, \sigma_{\varepsilon,t}^2)$")
             if has_grad:
-                ax_grad.set_ylabel(r"$\|\nabla \ell(\theta^{(t)})\|_2$")
+                ax_grad.set_ylabel(r"$\|\nabla_{\sigma_f^2, \sigma_\varepsilon^2} (-\log p(\mathbf{y}|X, \sigma_{f,t}^2, \sigma_{\varepsilon,t}^2))\|_2$")
             if has_nlml:
-                ax_nlml.set_ylabel("Negative Log Marginal Likelihood")
+                ax_nlml.set_ylabel(r"$-\log p(\mathbf{y}|X, \sigma_{f,t}^2, \sigma_{\varepsilon,t}^2)$")
         ax_nlml.set_xlabel("Iteration $t$")
         ax_sigma.grid(True, linestyle=":", linewidth=0.6, alpha=0.6)
         if has_grad:
@@ -469,9 +469,9 @@ def make_res18_seed_subplots(
         Line2D([0], [0], color="k", linestyle="--", linewidth=1.2),
     ]
     style_labels = [
-        r"$\sigma_f^2$ optimal",
-        r"$\sigma_\varepsilon^2$ optimal",
-        "NLML optimal",
+        r"$(\sigma_f^{2})^{\star}$",
+        r"$(\sigma_\varepsilon^{2})^{\star}$",
+        r"$-\log p(\mathbf{y}|X, (\sigma_f^{2})^{\star}, (\sigma_\varepsilon^{2})^{\star})$",
     ]
 
     if mu_handles:
